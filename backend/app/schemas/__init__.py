@@ -13,7 +13,13 @@ from app.schemas.download import (
 from app.schemas.job import JobCreate, JobListResponse, JobLogsResponse, JobOut
 from app.schemas.media import MediaListResponse, MediaOut
 from app.schemas.settings import SettingsOut, SettingsUpdate
-from app.schemas.stats import OverviewStats, TimelineBucket, TimelineResponse
+from app.schemas.stats import (
+    OverviewStats,
+    StorageBreakdown,
+    StorageStats,
+    TimelineBucket,
+    TimelineResponse,
+)
 
 __all__ = [
     "AccountListResponse",
@@ -33,6 +39,8 @@ __all__ = [
     "SettingsOut",
     "SettingsUpdate",
     "OverviewStats",
+    "StorageBreakdown",
+    "StorageStats",
     "TimelineBucket",
     "TimelineResponse",
 ]

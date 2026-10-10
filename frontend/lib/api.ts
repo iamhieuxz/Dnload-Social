@@ -22,6 +22,37 @@ export interface OverviewStats {
   jobs_running: number;
   jobs_completed_24h: number;
   jobs_failed_24h: number;
+  by_platform: Record<string, number>;
+  size_by_platform: Record<string, number>;
+  pending_count: number;
+  downloads_24h: number;
+  downloads_7d: number;
+}
+
+export interface StorageBreakdown {
+  platform: string;
+  path: string;
+  exists: boolean;
+  file_count: number;
+  folder_count: number;
+  size_bytes: number;
+}
+
+export interface StorageStats {
+  total_size_bytes: number;
+  total_files: number;
+  total_folders: number;
+  free_bytes: number;
+  total_disk_bytes: number;
+  by_platform: StorageBreakdown[];
+}
+
+export interface TimelineBucket {
+  date: string;
+  count: number;
+}
+export interface TimelineResponse {
+  buckets: TimelineBucket[];
 }
 
 export interface Account {
