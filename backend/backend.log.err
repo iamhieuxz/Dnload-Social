@@ -1,0 +1,1571 @@
+INFO:     Started server process [2324]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:50672 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 213, in execute
+    self._adapt_connection._handle_exception(error)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 373, in _handle_exception
+    raise error
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 195, in execute
+    self.await_(_cursor.execute(operation, parameters))
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\cursor.py", line 40, in execute
+    await self._execute(self._cursor.execute, sql, parameters)
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\cursor.py", line 32, in _execute
+    return await self._conn._execute(fn, *args, **kwargs)
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\core.py", line 160, in _execute
+    return await future
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: database is locked
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "F:\web-app2\backend\.venv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "F:\web-app2\backend\.venv\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\applications.py", line 1216, in __call__
+    await super().__call__(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\telemetry\_asgi.py", line 151, in __call__
+    await self.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\cors.py", line 91, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\cors.py", line 149, in simple_response
+    await self.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\routing.py", line 676, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 2786, in app
+    await route.handle(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 1817, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 2869, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 1843, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 1308, in handle
+    await effective_context.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 165, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 151, in app
+    response = await f(request)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 727, in app
+    raw_response = await run_endpoint_function(
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 360, in run_endpoint_function
+    return await dependant.call(**values)
+  File "F:\web-app2\backend\app\api\downloads.py", line 250, in delete_download
+    await db.commit()
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 1000, in commit
+    await greenlet_spawn(self.sync_session.commit)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 2035, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 1316, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 1290, in _prepare_impl
+    self.session.flush()
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 465, in execute
+    rec.execute(self)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 678, in execute
+    util.preloaded.orm_persistence.delete_obj(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 194, in delete_obj
+    _emit_delete_statements(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 1472, in _emit_delete_statements
+    c = connection.execute(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1421, in execute
+    return meth(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1643, in _execute_clauseelement
+    ret = self._execute_context(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1848, in _execute_context
+    return self._exec_single_context(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1988, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 213, in execute
+    self._adapt_connection._handle_exception(error)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 373, in _handle_exception
+    raise error
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 195, in execute
+    self.await_(_cursor.execute(operation, parameters))
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\cursor.py", line 40, in execute
+    await self._execute(self._cursor.execute, sql, parameters)
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\cursor.py", line 32, in _execute
+    return await self._conn._execute(fn, *args, **kwargs)
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\core.py", line 160, in _execute
+    return await future
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) database is locked
+[SQL: DELETE FROM downloads WHERE downloads.id = ?]
+[parameters: (5,)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 213, in execute
+    self._adapt_connection._handle_exception(error)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 373, in _handle_exception
+    raise error
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 195, in execute
+    self.await_(_cursor.execute(operation, parameters))
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\cursor.py", line 40, in execute
+    await self._execute(self._cursor.execute, sql, parameters)
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\cursor.py", line 32, in _execute
+    return await self._conn._execute(fn, *args, **kwargs)
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\core.py", line 160, in _execute
+    return await future
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: database is locked
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "F:\web-app2\backend\.venv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "F:\web-app2\backend\.venv\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\applications.py", line 1216, in __call__
+    await super().__call__(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\telemetry\_asgi.py", line 151, in __call__
+    await self.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\cors.py", line 91, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\cors.py", line 149, in simple_response
+    await self.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\routing.py", line 676, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 2786, in app
+    await route.handle(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 1817, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 2869, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 1843, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 1308, in handle
+    await effective_context.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 165, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 151, in app
+    response = await f(request)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 727, in app
+    raw_response = await run_endpoint_function(
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 360, in run_endpoint_function
+    return await dependant.call(**values)
+  File "F:\web-app2\backend\app\api\downloads.py", line 250, in delete_download
+    await db.commit()
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 1000, in commit
+    await greenlet_spawn(self.sync_session.commit)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 2035, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 1316, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 1290, in _prepare_impl
+    self.session.flush()
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 465, in execute
+    rec.execute(self)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 678, in execute
+    util.preloaded.orm_persistence.delete_obj(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 194, in delete_obj
+    _emit_delete_statements(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 1472, in _emit_delete_statements
+    c = connection.execute(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1421, in execute
+    return meth(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1643, in _execute_clauseelement
+    ret = self._execute_context(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1848, in _execute_context
+    return self._exec_single_context(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1988, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 213, in execute
+    self._adapt_connection._handle_exception(error)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 373, in _handle_exception
+    raise error
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 195, in execute
+    self.await_(_cursor.execute(operation, parameters))
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\cursor.py", line 40, in execute
+    await self._execute(self._cursor.execute, sql, parameters)
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\cursor.py", line 32, in _execute
+    return await self._conn._execute(fn, *args, **kwargs)
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\core.py", line 160, in _execute
+    return await future
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) database is locked
+[SQL: DELETE FROM downloads WHERE downloads.id = ?]
+[parameters: (4,)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+INFO:     127.0.0.1:51353 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51387 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51641 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51643 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51649 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51652 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51655 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51658 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51660 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51665 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51666 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51668 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51670 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51672 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51674 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51676 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51679 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51680 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51682 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51685 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51686 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51688 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51690 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51692 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51695 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51696 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51699 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51700 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51702 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51704 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51706 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51708 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51710 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51712 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51716 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51717 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51719 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51722 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51724 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51725 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51727 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51729 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51732 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51734 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51735 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51737 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51740 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51742 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51743 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51746 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51747 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51749 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51752 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51753 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51755 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51757 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51759 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51762 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51767 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51774 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51785 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51786 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51788 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51791 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51793 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51795 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51797 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51799 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51802 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51803 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51805 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51808 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51809 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51811 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51813 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51815 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51817 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51819 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51821 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51823 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51825 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51827 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51829 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51831 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51833 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51835 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51837 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51839 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51841 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51843 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51845 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51847 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51849 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51851 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51853 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51855 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51857 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51859 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51861 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51863 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51865 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51867 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51869 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51871 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51873 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51875 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51877 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51879 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51881 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51883 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51885 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51887 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51889 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51891 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51893 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51895 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51897 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51899 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51901 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51903 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51905 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51907 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51909 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51911 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51913 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51915 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51917 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51919 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51921 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51923 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51925 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51927 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51929 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51931 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51933 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51935 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51937 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51939 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51941 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51943 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51945 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51947 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51949 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51951 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51953 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51955 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51957 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51960 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51962 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51964 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51966 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51968 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51970 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51972 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51974 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51976 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51978 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51980 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51982 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51984 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51986 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51988 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51990 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51992 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51994 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51996 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:51998 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52000 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52002 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52004 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52006 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52008 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52010 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52012 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52014 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52016 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52018 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52020 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52022 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52024 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52026 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52028 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52030 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52032 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52034 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52036 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52038 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52040 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52042 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52044 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52046 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52048 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52050 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52052 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52054 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52056 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52058 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52060 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52062 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52064 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52066 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52068 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52070 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52072 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52074 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52076 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52078 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52080 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52082 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52084 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52086 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52088 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52090 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52092 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52094 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52096 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52098 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52100 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52102 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52104 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52106 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52108 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52110 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52112 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52114 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52116 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52118 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52120 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52122 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52125 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52127 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52129 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52131 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52133 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52135 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52137 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52139 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52141 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52143 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52145 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52147 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52149 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52151 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52153 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52155 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52157 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52159 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52161 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52163 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52165 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52167 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52169 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52171 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52173 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52175 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52177 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52179 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52181 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52183 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52185 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52187 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52189 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52191 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52193 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52195 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52197 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52199 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52201 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52203 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52205 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52207 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52209 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52211 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52214 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52217 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52219 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52222 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52224 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52226 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52229 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52231 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52235 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52237 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52239 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52241 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52243 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52245 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52259 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52261 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52263 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52265 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52269 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52271 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52273 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52275 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52277 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52279 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52282 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52284 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52286 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52288 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52290 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52293 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52295 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52297 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52299 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52301 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52303 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52305 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52307 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52309 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52311 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52313 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52315 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52317 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52319 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52321 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52323 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52325 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52327 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52329 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52331 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52333 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52335 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 213, in execute
+    self._adapt_connection._handle_exception(error)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 373, in _handle_exception
+    raise error
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 195, in execute
+    self.await_(_cursor.execute(operation, parameters))
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\cursor.py", line 40, in execute
+    await self._execute(self._cursor.execute, sql, parameters)
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\cursor.py", line 32, in _execute
+    return await self._conn._execute(fn, *args, **kwargs)
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\core.py", line 160, in _execute
+    return await future
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlite3.OperationalError: database is locked
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "F:\web-app2\backend\.venv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "F:\web-app2\backend\.venv\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\applications.py", line 1216, in __call__
+    await super().__call__(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\telemetry\_asgi.py", line 151, in __call__
+    await self.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\cors.py", line 91, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\cors.py", line 149, in simple_response
+    await self.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\routing.py", line 676, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 2786, in app
+    await route.handle(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 1817, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 2869, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 1843, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 1308, in handle
+    await effective_context.app(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 165, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "F:\web-app2\backend\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 151, in app
+    response = await f(request)
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 727, in app
+    raw_response = await run_endpoint_function(
+  File "F:\web-app2\backend\.venv\lib\site-packages\fastapi\routing.py", line 360, in run_endpoint_function
+    return await dependant.call(**values)
+  File "F:\web-app2\backend\app\api\downloads.py", line 160, in batch_create
+    await db.commit()
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 1000, in commit
+    await greenlet_spawn(self.sync_session.commit)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 2035, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 1316, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 1290, in _prepare_impl
+    self.session.flush()
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4353, in flush
+    self._flush(objects)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4488, in _flush
+    with util.safe_reraise():
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\session.py", line 4449, in _flush
+    flush_context.execute()
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 465, in execute
+    rec.execute(self)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\unitofwork.py", line 641, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 94, in save_obj
+    _emit_insert_statements(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\orm\persistence.py", line 1234, in _emit_insert_statements
+    result = connection.execute(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1421, in execute
+    return meth(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1643, in _execute_clauseelement
+    ret = self._execute_context(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1848, in _execute_context
+    return self._exec_single_context(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1988, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 213, in execute
+    self._adapt_connection._handle_exception(error)
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 373, in _handle_exception
+    raise error
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 195, in execute
+    self.await_(_cursor.execute(operation, parameters))
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "F:\web-app2\backend\.venv\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\cursor.py", line 40, in execute
+    await self._execute(self._cursor.execute, sql, parameters)
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\cursor.py", line 32, in _execute
+    return await self._conn._execute(fn, *args, **kwargs)
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\core.py", line 160, in _execute
+    return await future
+  File "F:\web-app2\backend\.venv\lib\site-packages\aiosqlite\core.py", line 63, in _connection_worker_thread
+    result = function()
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) database is locked
+[SQL: INSERT INTO downloads (job_id, account_id, platform, source_type, url, shortcode, media_type, content_type, title, author, file_path, file_name, file_size_bytes, thumbnail_url, status, error_message, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at]
+[parameters: (None, None, 'instagram', 'link', 'https://www.instagram.com/nasa/', None, None, 'post', None, 'nasa', None, None, 0, None, <DownloadStatus.PENDING: 'pending'>, None, None)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+INFO:     127.0.0.1:52339 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52341 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52343 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52345 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52347 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52349 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52351 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52353 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52356 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52358 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52360 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52362 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52364 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52366 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52368 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52370 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52372 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52374 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52376 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52378 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52380 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52382 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52384 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52386 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52388 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52390 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52392 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52394 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52396 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52398 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52401 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52403 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52405 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52407 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52409 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52412 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52414 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52416 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52418 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52421 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52423 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52425 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52427 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52429 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52431 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52433 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52435 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52437 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52439 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52441 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52443 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52445 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52447 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52449 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52451 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52453 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52455 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52457 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52459 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52461 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52463 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52465 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52467 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52469 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52471 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52474 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52476 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52479 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52481 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52483 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52485 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52487 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52489 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52491 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52493 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52495 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52497 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52499 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52501 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52503 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52505 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52507 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52509 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52511 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52513 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52516 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52518 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52520 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52522 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52524 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52526 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52528 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52530 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52532 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52534 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52536 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52538 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52540 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52542 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52544 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52546 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52548 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52550 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52552 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52554 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52556 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52558 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52560 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52562 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52564 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52566 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52568 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52570 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52573 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52576 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52578 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52580 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52582 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52584 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52586 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52588 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52590 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52592 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52595 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52597 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52599 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52601 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52603 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52605 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52607 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52609 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52611 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52613 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52615 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52617 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52619 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52621 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52623 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52625 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52627 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52629 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52631 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52633 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52635 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52637 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52639 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52641 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52643 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52645 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52647 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52649 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52651 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52653 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52655 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52657 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52659 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52661 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52663 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52665 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52667 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52669 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52671 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52673 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52675 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52677 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52679 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52681 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52683 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52685 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52687 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52690 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52692 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52694 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52696 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52698 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52700 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52702 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52704 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52706 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52708 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52710 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52712 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52714 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52716 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52718 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52720 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52722 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52724 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52726 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52728 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52730 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52732 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52734 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52736 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52738 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52740 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52742 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52744 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52746 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52748 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52750 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52752 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52754 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52756 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52758 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52760 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52762 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52764 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52766 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52768 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52770 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52772 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52774 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52776 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52778 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52780 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52782 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52784 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52786 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52788 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52790 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52792 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52794 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52796 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52798 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52800 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52802 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52805 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52808 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52844 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52846 - "WebSocket /ws/system" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52848 - "WebSocket /ws/system" [accepted]
+INFO:     connection open

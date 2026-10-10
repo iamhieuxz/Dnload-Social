@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+*.log
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Project-specific
+none
+secrets/
+backend/secrets/
+downloads/
+logs/
+.pids/
+
+# Credentials / cookies — NEVER commit these
+cookies.txt
+*cookie*.txt
+!_empty_cookie.txt
+secrets/**/*.txt
+*.key
+*.pem
+
+# Download archives (written by gallery-dl / yt-dlp at runtime)
+*.sqlite
+*.sqlite-journal
+*.db
+
+# Build cache
+*.tsbuildinfo
+
+# Local scratch files from debugging sessions
+_t.log
+_t.err
+_f.log
+_f.err
