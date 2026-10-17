@@ -20,7 +20,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={client}>
       {children}
-      <Toaster richColors theme="dark" position="top-right" />
+      <Toaster richColors theme="dark" position="bottom-left" />
     </QueryClientProvider>
   );
 }
