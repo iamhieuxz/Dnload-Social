@@ -1,5 +1,8 @@
 import type { Config } from "tailwindcss";
 
+// Dnload Social design tokens — see docs/REDESIGN-PLAN.md §4.
+// Semantic names (background, card, primary, muted, border...) are kept so
+// existing pages keep working; values come from the plan palette.
 const config: Config = {
   darkMode: "class",
   content: [
@@ -10,32 +13,60 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "hsl(240 10% 3.9%)",
-        foreground: "hsl(0 0% 98%)",
-        card: "hsl(240 10% 5%)",
-        "card-foreground": "hsl(0 0% 98%)",
-        primary: "hsl(322 75% 60%)",     // Instagram pink
-        "primary-foreground": "hsl(0 0% 0%)",
-        secondary: "hsl(240 4% 16%)",
-        "secondary-foreground": "hsl(0 0% 98%)",
-        muted: "hsl(240 5% 11%)",
-        "muted-foreground": "hsl(240 5% 65%)",
-        accent: "hsl(199 89% 48%)",       // Sky blue
-        "accent-foreground": "hsl(0 0% 0%)",
-        success: "hsl(160 84% 39%)",
-        warning: "hsl(38 92% 50%)",
-        destructive: "hsl(0 84% 60%)",
-        border: "hsl(240 4% 16%)",
-        input: "hsl(240 4% 16%)",
-        ring: "hsl(322 75% 60%)",
+        // Raw plan palette
+        ground: "#0B0B0E",
+        "surface-1": "#131318",
+        "surface-2": "#1A1A20",
+        "surface-3": "#23232B",
+        ink: "#F4F4F5",
+        "ink-2": "#A1A1AA",
+        "ink-3": "#6B6B75",
+        accent: "#E8C547",
+        "accent-soft": "rgba(232,197,71,0.12)",
+        "plat-ig": "#C7A8FF",
+        "plat-x": "#6BA6FF",
+        "plat-tiktok": "#FF7AA8",
+
+        // Semantic aliases used by existing components
+        background: "#0B0B0E",
+        foreground: "#F4F4F5",
+        card: "#131318",
+        "card-hover": "#1A1A20",
+        "card-foreground": "#F4F4F5",
+        primary: "#E8C547",
+        "primary-foreground": "#0B0B0E",
+        secondary: "#1A1A20",
+        "secondary-foreground": "#F4F4F5",
+        muted: "#1A1A20",
+        "muted-foreground": "#A1A1AA",
+        success: "#4ADE80",
+        "success-foreground": "#0B0B0E",
+        info: "hsl(210 90% 60%)",
+        "info-foreground": "#0B0B0E",
+        warning: "#F5A524",
+        "warning-foreground": "#0B0B0E",
+        destructive: "#F87171",
+        "destructive-foreground": "#FFFFFF",
+        border: "rgba(255,255,255,0.07)",
+        input: "rgba(255,255,255,0.07)",
+        ring: "#E8C547",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "Consolas", "monospace"],
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        display: ["var(--font-inter-tight)", "var(--font-inter)", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "JetBrains Mono", "Consolas", "monospace"],
+      },
+      borderRadius: {
+        // Plan radius scale: 6 control · 10 card · 14 modal · 20 palette (never above 20)
+        card: "10px",
+        modal: "14px",
+        palette: "20px",
       },
       boxShadow: {
-        glow: "0 0 24px hsl(322 75% 60% / 0.25)",
-        "glow-sm": "0 0 12px hsl(322 75% 60% / 0.2)",
+        // Plan elevation: rest / raised / float
+        raised: "0 1px 0 rgba(255,255,255,0.04) inset, 0 0 0 1px rgba(255,255,255,0.07)",
+        float: "0 12px 32px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.07)",
+        card: "0 1px 0 rgba(255,255,255,0.04) inset, 0 0 0 1px rgba(255,255,255,0.07)",
       },
       animation: {
         "fade-in-up": "fade-in-up 0.4s ease-out backwards",

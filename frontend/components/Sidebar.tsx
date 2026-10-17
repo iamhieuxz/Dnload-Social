@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Users, History, Settings, Download, Sparkles, FolderTree, ListChecks } from "lucide-react";
+import { Home, Users, History, Settings, FolderTree, ListChecks } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type Job } from "@/lib/api";
+import { BrandMark } from "@/components/BrandMark";
 
 const links = [
   { href: "/", label: "Dashboard", icon: Home },
@@ -22,24 +23,29 @@ export function Sidebar() {
   const { data } = useQuery<{ job: Job | null }>({
     queryKey: ["active-job"],
     queryFn: async () => (await api.get("/api/jobs/active")).data,
-    refetchInterval: 5_000,
+    // Shortcut: keep polling only while there is an active job. When
+    // the queue is idle the indicator is just a dot — polling for it
+    // every 5s forever is pure waste (3 clients × 17k reqs/day each).
+    // When a job appears we resume polling so the badge stays live.
+    refetchInterval: (query) => (query.state.data?.job ? 5_000 : false),
   });
   const hasActive = !!data?.job;
 
   return (
-    <aside className="hidden md:flex w-64 flex-col border-r border-white/5 bg-card/40 backdrop-blur-xl p-4">
-      <div className="flex items-center gap-3 mb-8 px-2">
-        <div className="relative">
-          <div className="absolute inset-0 bg-primary/40 blur-xl rounded-full" />
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-glow-sm">
-            <Download className="h-5 w-5 text-white" />
+    <aside className="hidden md:flex w-64 flex-col border-r border-border bg-card p-4">
+      {/* Logo + brand */}
+      <Link
+        href="/"
+        className="flex items-center gap-3 mb-8 px-2 rounded-md hover:bg-muted transition-colors"
+      >
+        <BrandMark />
+        <div className="leading-tight">
+          <div className="font-display text-[15px] font-semibold tracking-[-0.02em]">
+            Dnload <span className="font-normal">Social</span>
           </div>
+          <div className="text-[11px] text-muted-foreground">Local · Multi-platform</div>
         </div>
-        <div>
-          <div className="text-base font-bold leading-tight gradient-text">IG Downloader</div>
-          <div className="text-[10px] text-muted-foreground tracking-wider uppercase">v7.0.0</div>
-        </div>
-      </div>
+      </Link>
 
       <nav className="space-y-1 flex-1">
         {links.map((l) => {
@@ -51,23 +57,23 @@ export function Sidebar() {
               key={l.href}
               href={l.href}
               className={cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 active
-                  ? "bg-gradient-to-r from-primary/15 to-accent/10 text-foreground border border-primary/20 shadow-glow-sm"
-                  : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
               <Icon
                 className={cn(
                   "h-4 w-4 transition-colors",
-                  active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                  active ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground"
                 )}
               />
               <span className="flex-1">{l.label}</span>
               {isJobs && hasActive && (
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
                 </span>
               )}
             </Link>
@@ -75,10 +81,12 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-4 rounded-lg border border-white/5 bg-gradient-to-br from-primary/5 to-accent/5 p-3">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span>Local-first · 100% offline</span>
+      {/* Footer status badge — matches ảnh's server health pill style */}
+      <div className="mt-4 rounded-lg border border-border bg-background p-3">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="h-1.5 w-1.5 rounded-full bg-success" />
+          <span className="text-foreground">Local-first</span>
+          <span className="ml-auto text-muted-foreground">100% offline</span>
         </div>
       </div>
     </aside>

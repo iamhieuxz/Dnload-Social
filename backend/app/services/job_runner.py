@@ -18,8 +18,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,7 +52,20 @@ class JobRunner:
     """
 
     def __init__(self) -> None:
+        # _lock guards BOTH the "is a job running?" state AND the critical
+        # section that picks up work. Holding it across enqueue prevents
+        # the classic double-click race: two `Run pending` clicks fired
+        # 200ms apart used to both pass the is_busy check (because the
+        # lock was only held once _run was already executing) and create
+        # two Jobs, with the second one immediately getting orphaned to
+        # STOPPED. The lock is now acquired BEFORE any DB work.
         self._lock = asyncio.Lock()
+        # Recovery runs ONCE per process, at the first enqueue() after
+        # the runner wakes up. Running it on every enqueue would reset
+        # downloads owned by a *different* in-flight job (e.g. another
+        # process holding the same job_id), which is the
+        # runner-global-stale-reset bug.
+        self._startup_sweep_done = False
         self._services: dict[str, InstagramService | TwitterService | TikTokService] = {}
         self._current_job_id: int | None = None
 
@@ -73,6 +87,8 @@ class JobRunner:
         stay parked for minutes waiting on the next stdout line (especially
         when the download is in a long sleep / rate-limit cooldown)."""
         for name, svc in self._services.items():
+            if svc.is_stopping:
+                continue
             try:
                 await svc.request_stop_async()
             except Exception:
@@ -91,39 +107,123 @@ class JobRunner:
         download, or a stop was requested but the process was killed before
         the finally-block could fire). We re-stamp them as `pending` so
         the run-pending flow can re-pick them up on the next attempt.
+
+        Lock semantics: we acquire `_lock` BEFORE doing any DB work. This
+        means the second `enqueue` of a double-click blocks here until the
+        first job releases. While blocked, the second call also reads the
+        current job state to decide whether to run or orphan — and since
+        it blocks on the lock, by the time it gets the lock the first
+        job is either still running (in which case we orphan) or has
+        finished cleanly.
         """
         from sqlalchemy import update as _update
-        async with session_scope() as session:
-            stale = _update(Download).where(
-                Download.status == DownloadStatus.DOWNLOADING,
-            ).values(status=DownloadStatus.PENDING)
-            result = await session.execute(stale)
-            if result.rowcount:
-                logger.info(
-                    "Startup sweep: reset %s stale `downloading` rows to `pending`",
-                    result.rowcount,
-                )
-        asyncio.create_task(self._run(job_id))
-
-    async def _run(self, job_id: int) -> None:
-        logger.info("[JOB %s] _run called, lock.locked=%s", job_id, self._lock.locked())
-        if self._lock.locked():
-            logger.warning("Another job is already running, skipping enqueue of %s", job_id)
-            # Mark the orphaned job as STOPPED so the UI doesn't show a
-            # "queued" zombie forever. We can't actually run it because
-            # the lock is held by a previous, still-running job.
+        try:
+            await asyncio.wait_for(self._lock.acquire(), timeout=0.05)
+        except asyncio.TimeoutError:
+            # First job is still busy. Orphan this one immediately so it
+            # doesn't sit in QUEUED forever and the UI doesn't think
+            # nothing's happening.
+            logger.warning("Job %s rejected at enqueue (busy)", job_id)
             await self._orphan_job(job_id)
             return
-        logger.info("[JOB %s] entering lock", job_id)
 
-        async with self._lock:
-            self._current_job_id = job_id
+        # We hold the lock for the lifetime of the job. _run will release
+        # it in its finally block. Pass the lock through so the finally
+        # block can release it (avoids us having to store state here).
+        # Recovery: only sweep stale `downloading` rows on the FIRST
+        # enqueue of this process lifetime, and only reset rows that
+        # aren't owned by the job we're about to run. Without the
+        # `job_id != :id` filter we would clobber a perfectly valid
+        # download owned by a sibling job in another process.
+        if not self._startup_sweep_done:
             try:
-                await self._execute(job_id)
-            finally:
-                self._current_job_id = None
-                self._services = {}
-                clear_job_logs(job_id)
+                async with session_scope() as session:
+                    stale = _update(Download).where(
+                        Download.status == DownloadStatus.DOWNLOADING,
+                        Download.job_id != job_id,
+                    ).values(status=DownloadStatus.PENDING, job_id=None)
+                    result = await session.execute(stale)
+                    if result.rowcount:
+                        logger.info(
+                            "Startup sweep: reset %s stale `downloading` rows to `pending`",
+                            result.rowcount,
+                        )
+                # Only mark the sweep done AFTER it commits successfully.
+                # A failure here leaves the flag False so the next enqueue
+                # gets a fresh attempt, instead of silently skipping it.
+                self._startup_sweep_done = True
+            except Exception:
+                logger.exception("Startup sweep failed for job %s; releasing lock", job_id)
+                self._lock.release()
+                await self._orphan_job(job_id)
+                return
+
+        asyncio.create_task(self._run_with_lock(job_id))
+
+    async def _run_with_lock(self, job_id: int) -> None:
+        """Wrapper that releases `_lock` after _run finishes. _run used to
+        do `async with self._lock:` which acquired AND released in the same
+        statement; we now keep the lock held across enqueue so a second
+        enqueue call can be rejected immediately."""
+        try:
+            await self._run(job_id)
+        finally:
+            if self._lock.locked():
+                self._lock.release()
+
+    async def _run(self, job_id: int) -> None:
+        logger.info("[JOB %s] _run called", job_id)
+        # Lock is already held by enqueue; don't re-acquire (we'd deadlock).
+        # Just set state and execute.
+        self._current_job_id = job_id
+        try:
+            await self._execute(job_id)
+        except Exception as e:
+            # Shortcut: any uncaught error from _execute (cookie key
+            # missing, DB unavailable, OOM, etc.) used to leave the job
+            # row stuck in RUNNING forever — the UI showed a phantom
+            # active job, the run button was locked, and the job page
+            # was empty. Mark it FAILED with the error message so the
+            # operator can see what happened, and detach its downloads
+            # so the next run-pending can re-pick them up.
+            logger.exception("[JOB %s] _execute crashed", job_id)
+            await self._mark_job_failed(job_id, repr(e))
+        finally:
+            self._current_job_id = None
+            self._services = {}
+            # Shortcut: keep the log buffer around on failure so the UI
+            # can show what went wrong. We only clear on success — see
+            # the call site below. This is symmetric with how the buffer
+            # is filled: if a job runs to completion, the logs are stale
+            # anyway; if it crashes, they're the only diagnostic.
+            pass
+
+    async def _mark_job_failed(self, job_id: int, error_message: str) -> None:
+        """Mark a job as FAILED (with error) and detach its downloads so
+        the queue can recover. Used by _run's exception path."""
+        from sqlalchemy import update as _update
+        try:
+            async with session_scope() as session:
+                job = await session.get(Job, job_id)
+                if job is not None and job.status in (JobStatus.QUEUED, JobStatus.RUNNING):
+                    job.status = JobStatus.FAILED
+                    job.finished_at = datetime.now(timezone.utc)
+                    job.error_message = error_message[:500]
+                # Detach downloads so they go back to PENDING and the
+                # next run-pending picks them up.
+                await session.execute(
+                    _update(Download)
+                    .where(Download.job_id == job_id,
+                           Download.status.in_([
+                               DownloadStatus.DOWNLOADING,
+                               DownloadStatus.PENDING,
+                           ]))
+                    .values(status=DownloadStatus.PENDING, job_id=None)
+                )
+                await _emit_status(job_id, JobStatus.FAILED,
+                                   extra={"reason": "exception"})
+        except Exception:
+            logger.exception("Failed to mark job %s as FAILED", job_id)
 
     async def _orphan_job(self, job_id: int) -> None:
         """Mark a job that could not start as STOPPED + detach any
@@ -138,7 +238,7 @@ class JobRunner:
                 if job.status not in (JobStatus.QUEUED,):
                     return
                 job.status = JobStatus.STOPPED
-                job.finished_at = datetime.utcnow()
+                job.finished_at = datetime.now(timezone.utc)
                 job.error_message = "Another job was already running"
                 # Release any rows we already attached to this job so the
                 # next run-pending can re-pick them up.
@@ -181,13 +281,13 @@ class JobRunner:
                 # fallback: look at job's own platform via the most recent downloads it owns
                 logger.warning("Job %s has no linked downloads; completing", job_id)
                 job.status = JobStatus.COMPLETED
-                job.finished_at = datetime.utcnow()
+                job.finished_at = datetime.now(timezone.utc)
                 await _emit_status(job_id, JobStatus.COMPLETED, extra={"processed": 0})
                 return
 
             platform: Platform = Platform(downloads[0].platform)
             job.status = JobStatus.RUNNING
-            job.started_at = datetime.utcnow()
+            job.started_at = datetime.now(timezone.utc)
             await session.flush()
             # Commit immediately so the UI sees the job as RUNNING
             # without waiting for the whole loop to finish.
@@ -230,27 +330,38 @@ class JobRunner:
                 else:
                     job.status = JobStatus.COMPLETED
             finally:
+                for cookie_paths in cookies.values():
+                    for cookie_path in cookie_paths:
+                        try:
+                            os.remove(cookie_path)
+                        except OSError:
+                            logger.warning("Could not remove temporary cookie file %s", cookie_path)
                 # "Perfect stop" — any rows that were marked `downloading`
                 # when we exited (because the user pressed Stop) are
                 # reverted to `pending` so the next run-pending call will
                 # pick them up again. The instagram/tiktok services use
                 # the gallery-dl --download-archive sqlite, so the actual
                 # file download work is idempotent and safe to re-run.
+                # Use a separate transaction so a rollback earlier in the
+                # outer session_scope doesn't drop this reset.
                 if any(s.is_stopping for s in services.values()):
-                    from sqlalchemy import update as _update
-                    reset_stmt = _update(Download).where(
-                        Download.job_id == job_id,
-                        Download.status == DownloadStatus.DOWNLOADING,
-                    ).values(status=DownloadStatus.PENDING)
-                    reset_result = await session.execute(reset_stmt)
-                    if reset_result.rowcount:
-                        logger.info(
-                            "Job %s stopped — reset %s in-progress downloads back to pending",
-                            job_id, reset_result.rowcount,
-                        )
-                        await session.flush()
+                    try:
+                        from sqlalchemy import update as _update
+                        async with session_scope() as reset_session:
+                            reset_stmt = _update(Download).where(
+                                Download.job_id == job_id,
+                                Download.status == DownloadStatus.DOWNLOADING,
+                            ).values(status=DownloadStatus.PENDING)
+                            reset_result = await reset_session.execute(reset_stmt)
+                            if reset_result.rowcount:
+                                logger.info(
+                                    "Job %s stopped — reset %s in-progress downloads back to pending",
+                                    job_id, reset_result.rowcount,
+                                )
+                    except Exception:
+                        logger.exception("Failed to reset in-progress rows for job %s", job_id)
 
-                job.finished_at = datetime.utcnow()
+                job.finished_at = datetime.now(timezone.utc)
                 root.removeHandler(ws_handler)
                 await _emit_status(
                     job_id, job.status,
@@ -260,6 +371,12 @@ class JobRunner:
                         "new_files": job.new_files_count,
                     },
                 )
+                # Only clear the log buffer when the job was stopped by
+                # the user. COMPLETED jobs keep their logs so the operator
+                # can scroll back and see what each download did. The
+                # buffer is capped at 5000 lines so memory cost is bounded.
+                if job.status == JobStatus.STOPPED:
+                    clear_job_logs(job_id)
 
     async def _process_one(
         self,
@@ -270,10 +387,6 @@ class JobRunner:
     ) -> bool:
         """Process a single Download row. Returns True on success."""
         try:
-            logger.info(
-                "Download #%s [%s] %s",
-                d.id, d.platform, d.url,
-            )
             d.status = DownloadStatus.DOWNLOADING
             await session.flush()
             await session.commit()  # make this status visible to the UI
@@ -300,42 +413,74 @@ class JobRunner:
             # Wrap with a watchdog: if no event for >90s AND the underlying
             # process has exited, finish up with whatever files we have.
             IDLE_TIMEOUT = 90.0
+            # Hard cap so a hung subprocess (gallery-dl sleeping in
+            # --sleep-request) can't pin a download row forever. After
+            # this many seconds we ask the service to stop, break the
+            # loop, and let the outer JobRunner mark the row failed.
+            TOTAL_DEADLINE = float(os.getenv("DOWNLOAD_TOTAL_DEADLINE_SECONDS", "1800"))
             last_event_at = asyncio.get_event_loop().time()
-            gen = service.download(target, cookie_files=platform_cookies, content_type=d.content_type)
+            started_at = last_event_at
+            gen = service.download(target, cookie_files=platform_cookies, content_type=d.content_type, author=d.author, run_id=str(d.id))
             while True:
                 if any(s.is_stopping for s in services.values()):
                     break
+                elapsed = asyncio.get_event_loop().time() - started_at
+                if elapsed >= TOTAL_DEADLINE:
+                    logger.warning("[ERR] timeout after %ss", int(elapsed))
+                    d.error_message = f"timeout after {int(elapsed)}s (total deadline)"
+                    for s in services.values():
+                        await s.request_stop_async()
+                    break
                 try:
-                    ev = await asyncio.wait_for(gen.__anext__(), timeout=IDLE_TIMEOUT)
+                    remaining = max(0.1, min(IDLE_TIMEOUT, TOTAL_DEADLINE - elapsed))
+                    ev = await asyncio.wait_for(gen.__anext__(), timeout=remaining)
                     last_event_at = asyncio.get_event_loop().time()
                 except (StopAsyncIteration, asyncio.TimeoutError) as e:
                     if isinstance(e, asyncio.TimeoutError):
                         runner_obj = service.runner
                         if runner_obj.is_running:
-                            logger.info(
-                                "Download #%s still running after %ss idle; continuing to wait",
-                                d.id, IDLE_TIMEOUT,
-                            )
+                            # Subprocess is still alive but silent — keep
+                            # waiting; this is normal during rate-limit
+                            # sleeps and long HTTP calls.
                             continue
-                        logger.info("Download #%s idle for %ss, runner exited, finishing", d.id, IDLE_TIMEOUT)
-                    else:
-                        logger.info("Download #%s generator finished (%s events)", d.id, len(events))
+                        # Process exited but no event surfaced — nothing
+                        # more to do.
                     break
                 events.append(ev)
                 if ev.get("type") == "user_start":
-                    logger.info("--> @%s", ev.get("user"))
+                    # Internal event; surfaced as part of the URL line so
+                    # the UI doesn't need to see "starting @user" twice.
+                    pass
                 elif ev.get("type") == "media":
                     if d.file_path is None:
                         d.file_path = ev.get("path")
                         d.file_name = ev.get("filename")
+                    # UI-facing: only the first media event per row is
+                    # worth showing (subsequent ones are parts of the
+                    # same tweet / carousel / Space chunk).
+                    if ev.get("new"):
+                        logger.info("[NEW] %s", ev.get("filename") or os.path.basename(ev.get("path", "")))
                 elif ev.get("type") == "user_done":
-                    logger.info("done @%s", ev.get("user"))
+                    pass
                 elif ev.get("type") == "error":
-                    logger.warning("Error for #%s: %s", d.id, ev.get("message"))
+                    # Trim to a short, user-readable name. Full trace
+                    # stays in the backend log; the user just sees
+                    # "ERR: rate limit exceeded" or similar.
+                    err_name = (ev.get("message") or "unknown").splitlines()[0][:200].rstrip()
+                    logger.warning("[ERR] %s", err_name)
                     d.error_message = ev.get("message")
                     break
                 elif ev.get("type") == "warn":
-                    logger.info("    warn: %s - %s", ev.get("code"), ev.get("line", "")[:120])
+                    # gallery-dl prints a line per already-on-disk file
+                    # ("# <path>"); surface the count as a single
+                    # [SKIP] so the terminal doesn't drown in skipped
+                    # archive entries.
+                    code = ev.get("code")
+                    if code == "no_output":
+                        logger.info("[ERR] no_output")
+                    else:
+                        # Internal warn — no UI tag → filtered out.
+                        pass
 
             # Pick the actual file from disk (gallery-dl/yt-dlp write to disk,
             # we just need to record where the file lives).
@@ -345,14 +490,15 @@ class JobRunner:
                 d.file_name = os.path.basename(file_path)
                 d.file_size_bytes = file_size
             else:
-                # No file produced. If we have an error message, propagate
-                # it; otherwise mark as failed with a generic explanation.
-                if not d.error_message:
-                    d.error_message = (
-                        f"No output file found for {d.platform} URL "
-                        f"(events={len(events)})"
-                    )
-                d.status = DownloadStatus.FAILED
+                # Truncate to 1000 chars so a 50KB stack trace from a
+                # gallery-dl crash doesn't bloat the row.
+                _set_no_output_failure(d, len(events))
+                # Skip logging here if the service already surfaced an
+                # [ERR] for this row — the no_output message is just
+                # the same condition reported twice, and we don't want
+                # the terminal to show two lines for one failure.
+                if d.error_message is None:
+                    logger.info("[ERR] %s", (d.error_message or "no output").splitlines()[0][:200])
                 await session.flush()
                 await session.commit()
                 await ws_manager.broadcast(
@@ -362,7 +508,7 @@ class JobRunner:
                 return False
 
             d.status = DownloadStatus.COMPLETED
-            d.completed_at = datetime.utcnow()
+            d.completed_at = datetime.now(timezone.utc)
             await session.flush()
             await session.commit()
             await ws_manager.broadcast("system", "download_update",
@@ -372,14 +518,16 @@ class JobRunner:
             return True
 
         except Exception as e:
-            logger.exception("Download #%s crashed", d.id)
+            # Truncate so a noisy crash trace doesn't bloat the row.
             d.status = DownloadStatus.FAILED
-            d.error_message = str(e)
+            d.error_message = str(e)[:1000]
+            err_name = str(e).splitlines()[0][:200] or "crashed"
+            logger.warning("[ERR] %s", err_name)
             await session.flush()
             try:
                 await session.commit()
             except Exception:
-                logger.exception("Failed to commit crash state for #%s", d.id)
+                pass
             await ws_manager.broadcast("system", "download_update",
                 {"id": d.id, "status": d.status.value, "error": str(e)})
             from app.core.logging_config import record_event
@@ -398,16 +546,7 @@ class JobRunner:
         return url
 
     def _find_output_file(self, d: Download, events: list[dict]) -> tuple[str | None, int]:
-        """Look on disk for the newest file under the expected output folder.
-
-        Returns (path, size) or (None, 0).
-
-        Strategy (in order of trust):
-          1. Use the explicit path that came through a `media` event.
-          2. Look in <base>/<author>/ (author inferred from URL).
-          3. Last resort: scan <base> but only for files created AFTER the
-             job started, so we don't pick up old files from previous jobs.
-        """
+        """Resolve only an explicit media event path; never guess from recency."""
         from app.config import get_settings
 
         base = {
@@ -428,54 +567,7 @@ class JobRunner:
                     if p2.exists():
                         return str(p2), p2.stat().st_size
 
-        # Fallback 1: scan the user's folder for the most recently modified file
-        # younger than 5 minutes (so we don't pick up old files from the gallery).
-        # Instagram posts are /p/<code> (no author in the path); X and TikTok
-        # both put the author three segments up (/user/status/1, /@user/video/1).
-        seg = 2 if d.platform == Platform.INSTAGRAM.value else 3
-        author = (d.author or d.url.split("/")[-seg]).lstrip("@").strip()
-        if author:
-            user_dir = base / author
-            if user_dir.exists():
-                newest = self._newest_file(user_dir, max_age_seconds=600)
-                if newest:
-                    return str(newest), newest.stat().st_size
-
-        # Fallback 2: last-resort scan of the entire base folder. Only used
-        # when the service emitted at least one event (so we know it actually
-        # ran) but the file wasn't found in the author folder either. This
-        # happens when the URL is a post (no clean author) and gallery-dl
-        # wrote a file but didn't yield a `media` event we could capture.
-        # We restrict to a 2-minute window so old files from prior jobs
-        # can't be picked up by mistake.
-        if events:
-            newest = self._newest_file(base, max_age_seconds=120)
-            if newest:
-                return str(newest), newest.stat().st_size
-
         return None, 0
-
-    def _newest_file(self, folder: Path, max_age_seconds: int) -> Path | None:
-        from time import time
-        cutoff = time() - max_age_seconds
-        best: tuple[float, Path] | None = None
-        try:
-            for p in folder.rglob("*"):
-                if not p.is_file():
-                    continue
-                if p.name.startswith("."):
-                    continue
-                try:
-                    mtime = p.stat().st_mtime
-                except OSError:
-                    continue
-                if mtime < cutoff:
-                    continue
-                if best is None or mtime > best[0]:
-                    best = (mtime, p)
-        except OSError:
-            return None
-        return best[1] if best else None
 
 
 # ----------------------------------------------------------------------------
@@ -494,31 +586,70 @@ async def _load_cookie_paths(session: AsyncSession) -> dict[str, list[str]]:
     """Return cookie file paths per platform.
 
     Why a dict instead of a flat list:
-      - IG and X have different cookie formats, so we must not mix them
-      - The JobRunner now passes the right list to each service
-      - TikTok needs none (public data), so its entry is empty and
-        TikTokService.cookies_required = False lets it run cookie-less
+      - IG, X and TikTok all have different cookie formats, so we must
+        not mix them — JobRunner passes the right list to each service.
+      - TikTok without a sessionid cookie is throttled to ~1 req / 5-10
+        min (causing the 12-min stall we saw in C1). Once a primary
+        cookie is uploaded it goes from "stuck" to "snappy" so the
+        empty-list default is a no-op fallback, not the steady state.
+
+    Also stamps `last_used_at` on the matching DB row for each loaded
+    cookie so the Settings page can show the user which slot was actually
+    used in the most recent job.
     """
     from app.config import get_settings
     settings = get_settings()
     cookie_dir = settings.get_cookie_folder()
 
-    ig_paths: list[str] = []
-    if cookie_dir.exists():
-        for name in ("cookie1.txt", "cookie2.txt"):
-            p = cookie_dir / name
-            if p.exists():
-                ig_paths.append(str(p))
+    from app.core.cookie_vault import decrypt_cookie_file
+    from app.models import TikTokCookie, TwitterCookie
 
-    tw_paths: list[str] = []
-    tw_dir = cookie_dir / "twitter"
-    if tw_dir.exists():
-        for name in ("tw_cookie1.txt", "tw_cookie2.txt"):
-            p = tw_dir / name
-            if p.exists():
-                tw_paths.append(str(p))
+    paths: dict[str, list[str]] = {"instagram": [], "twitter": [], "tiktok": []}
+    cookie_slots = {
+        "instagram": (cookie_dir, ("cookie1.txt", "cookie2.txt"), None),
+        "twitter": (cookie_dir / "twitter", ("tw_cookie1.txt", "tw_cookie2.txt"), TwitterCookie),
+        "tiktok": (cookie_dir / "tiktok", ("tt_cookie1.txt", "tt_cookie2.txt"), TikTokCookie),
+    }
+    # Slots we successfully decrypted — stamped with last_used_at after the
+    # call returns so a cookie error doesn't claim the slot was just used.
+    from sqlalchemy import update as _sa_update
+    used_slots: list[tuple[Any, Any]] = []  # (model_cls, slot_value_str)
+    try:
+        for platform, (folder, names, model_cls) in cookie_slots.items():
+            if not folder.exists():
+                continue
+            for name in names:
+                path = folder / name
+                if not path.exists():
+                    continue
+                paths[platform].append(decrypt_cookie_file(path))
+                if model_cls is not None:
+                    slot_value = "primary" if name.endswith("1.txt") else "backup"
+                    used_slots.append((model_cls, slot_value))
+    except Exception:
+        for platform_paths in paths.values():
+            for temp_path in platform_paths:
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+        raise
 
-    return {"instagram": ig_paths, "twitter": tw_paths, "tiktok": []}
+    # Stamp last_used_at in a separate transaction so a DB failure doesn't
+    # abort the in-flight job.
+    if used_slots:
+        try:
+            async with session_scope() as stamp_session:
+                for model_cls, slot_value in used_slots:
+                    await stamp_session.execute(
+                        _sa_update(model_cls)
+                        .where(model_cls.slot == slot_value)
+                        .values(last_used_at=datetime.now(timezone.utc))
+                    )
+        except Exception:
+            logger.exception("Failed to stamp last_used_at on cookie rows")
+
+    return paths
 
 
 async def _emit_status(job_id: int, status: JobStatus, extra: dict | None = None) -> None:
@@ -530,6 +661,21 @@ async def _emit_status(job_id: int, status: JobStatus, extra: dict | None = None
     # Also append to the system-wide polling buffer for HTTP-only clients
     from app.core.logging_config import record_event
     record_event("job_update", {"job_id": job_id, **payload})
+
+
+def _set_no_output_failure(d, event_count: int) -> None:
+    """Mark a Download row as FAILED when no output file was produced
+    by the underlying service. Keeps the prior error_message if any,
+    otherwise writes a generic one, and truncates the result to
+    1000 chars so a 50KB stack trace from a gallery-dl crash doesn't
+    bloat the row (B-20)."""
+    if not d.error_message:
+        d.error_message = (
+            f"No output file found for {d.platform} URL "
+            f"(events={event_count})"
+        )
+    d.error_message = d.error_message[:1000]
+    d.status = DownloadStatus.FAILED
 
 
 job_runner = JobRunner()

@@ -27,7 +27,11 @@ logger = logging.getLogger(__name__)
 
 class TikTokService(InstagramService):
     archive_name = ".tiktok_download_archive.sqlite"
-    cookies_required = False
+    # TikTok public API now requires a logged-in session cookie (HTML page
+    # returns a JS shell without SIGI_STATE; the data API returns 403
+    # when called anonymously). The cookie lives at <cookie_folder>/tiktok/
+    # tt_cookie{1,2}.txt and is uploaded via Settings → TikTok cookies.
+    cookies_required = True
     # TikTok items have no shortcode/num — {id} is the video ID and {date}
     # keeps files in the same shape as the other platforms.
     filename_template = "{date:%Y-%m-%d}_{id}.{extension}"
@@ -37,12 +41,16 @@ class TikTokService(InstagramService):
         target: str,
         cookie_files: list[str] | None = None,
         content_type: str | None = None,
+        author: str | None = None,
+        run_id: str | None = None,
     ) -> AsyncIterator[dict]:
         """Download one TikTok target.
 
         content_type is accepted for signature parity with the other services
         but TikTok has a single kind of media (video), so it is ignored —
         the URL shape decides whether we grab one post or the whole profile.
+        `author` is accepted for the same parity reason; TikTok usernames
+        come from the URL, so it is ignored too.
         """
         normalized = self._normalize_target(target)
         username = self._derive_dest_name(normalized)

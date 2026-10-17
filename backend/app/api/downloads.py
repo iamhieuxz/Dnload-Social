@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Download, DownloadStatus
 from app.schemas import DownloadListResponse, DownloadOut, DownloadStats
+from app.core.url_guard import validate_url as _validate_download_url
 
 router = APIRouter(prefix="/api/downloads", tags=["downloads"])
 
@@ -43,36 +44,44 @@ async def pending_summary(
     platform: str = Query(..., description="instagram | twitter | tiktok"),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Return the number of pending / in-progress downloads for a platform.
+    """Return the number of pending / in-progress / failed downloads for a
+    platform.
 
     Used by the UI to decide whether to show "Resume pending (N items)"
     next to "Run pending". Anything in `downloading` is *also* counted as
     resumable — the runner's startup sweep will reset those back to
     `pending` on the next run, so a single count is fine for UX purposes.
+    The `failed` count is exposed so the Resume button can also show how
+    many rows are eligible for one-click retry.
     """
     from sqlalchemy import and_, or_
     rows = (await db.execute(
         select(Download.status, func.count(Download.id))
         .where(
             Download.platform == platform,
-            or_(
-                Download.status == DownloadStatus.PENDING,
-                Download.status == DownloadStatus.DOWNLOADING,
-            ),
+            Download.status.in_([
+                DownloadStatus.PENDING,
+                DownloadStatus.DOWNLOADING,
+                DownloadStatus.FAILED,
+            ]),
         )
         .group_by(Download.status)
     )).all()
     pending = 0
     in_flight = 0
+    failed = 0
     for stat, cnt in rows:
         if stat == DownloadStatus.PENDING:
             pending = cnt
         elif stat == DownloadStatus.DOWNLOADING:
             in_flight = cnt
+        elif stat == DownloadStatus.FAILED:
+            failed = cnt
     return {
         "platform": platform,
         "pending": pending,
         "in_flight": in_flight,
+        "failed": failed,
         "resumable": pending + in_flight,
     }
 
@@ -132,38 +141,39 @@ async def list_downloads(
 
 @router.get("/stats", response_model=DownloadStats)
 async def get_download_stats(db: AsyncSession = Depends(get_db)) -> DownloadStats:
-    rows = (await db.execute(
-        select(Download.platform, Download.status, Download.source_type, Download.file_size_bytes, Download.created_at)
-    )).all()
-
-    by_platform: dict[str, int] = {}
-    by_status: dict[str, int] = {}
-    by_source: dict[str, int] = {}
-    total_size = 0
-    last_24h = 0
-    last_7d = 0
-    now = datetime.utcnow()
+    # SQL aggregates — avoid loading 144k+ rows into memory just to
+    # count them in Python. Each GROUP BY runs as a single query.
+    now = datetime.now(timezone.utc)
     day_ago = now - timedelta(days=1)
     week_ago = now - timedelta(days=7)
-    total = len(rows)
 
-    for plat, stat, src, size, created in rows:
-        by_platform[plat] = by_platform.get(plat, 0) + 1
-        by_status[stat] = by_status.get(stat, 0) + 1
-        by_source[src] = by_source.get(src, 0) + 1
-        if size:
-            total_size += size
-        if created and created >= day_ago:
-            last_24h += 1
-        if created and created >= week_ago:
-            last_7d += 1
+    async def _group_count(column):
+        return dict((await db.execute(
+            select(column, func.count(Download.id)).group_by(column)
+        )).all())
+
+    by_platform = await _group_count(Download.platform)
+    by_status = await _group_count(Download.status)
+    by_source = await _group_count(Download.source_type)
+
+    # Total + size sum + 24h/7d buckets in one query.
+    total = (await db.execute(select(func.count(Download.id)))).scalar_one()
+    total_size = (await db.execute(
+        select(func.coalesce(func.sum(Download.file_size_bytes), 0))
+    )).scalar_one()
+    last_24h = (await db.execute(
+        select(func.count(Download.id)).where(Download.created_at >= day_ago)
+    )).scalar_one()
+    last_7d = (await db.execute(
+        select(func.count(Download.id)).where(Download.created_at >= week_ago)
+    )).scalar_one()
 
     return DownloadStats(
         total=total,
         by_platform=by_platform,
         by_status=by_status,
         by_source=by_source,
-        total_size_bytes=total_size,
+        total_size_bytes=int(total_size),
         last_24h=last_24h,
         last_7d=last_7d,
     )
@@ -174,7 +184,7 @@ async def batch_create(req: BatchCreateRequest, db: AsyncSession = Depends(get_d
     """Create many Download rows at once — used by the UI 'Add to queue' flow."""
     ids: list[int] = []
     for item in req.items:
-        url = item.url.strip()
+        url = _validate_download_url(item.url, req.platform)
         if not url:
             continue
         # Default: IG → post, X → tweet, TikTok → tiktok. Per-item content_type overrides.
@@ -207,9 +217,89 @@ async def batch_create(req: BatchCreateRequest, db: AsyncSession = Depends(get_d
     return BatchCreateResponse(created=len(ids), ids=ids)
 
 
+class FromHighlightIdsRequest(BaseModel):
+    user: str = Field(..., description="Instagram username (e.g. 'hienthuc.27')")
+    ids: list[str] = Field(..., min_length=1, max_length=500,
+                           description="Highlight reel IDs (15-22 digits each)")
+
+
+class FromHighlightIdsResponse(BaseModel):
+    created: int
+    skipped: int
+    ids: list[int]
+
+
+@router.post("/from-highlight-ids", response_model=FromHighlightIdsResponse, status_code=201)
+async def from_highlight_ids(
+    req: FromHighlightIdsRequest, db: AsyncSession = Depends(get_db)
+) -> FromHighlightIdsResponse:
+    """Create one Download row per highlight reel ID.
+
+    gallery-dl's */highlights/ GraphQL endpoint now requires following
+    the user AND a browser context. As a workaround, the user can paste
+    the highlight reel IDs (visible in the URL when they click a
+    highlight in their browser) and we hit the working
+    /stories/highlights/<id>/ pattern directly.
+    """
+    user = req.user.strip().lstrip("@")
+    if not user or "/" in user:
+        raise HTTPException(status_code=400, detail="invalid username")
+
+    seen: set[str] = set()
+    created_ids: list[int] = []
+    skipped = 0
+    # Shortcut: query the URL set ONCE so we can dedup across the whole
+    # request in a single round trip instead of N lookups below. This
+    # also makes the endpoint idempotent — re-pasting the same reel IDs
+    # after a partial failure no longer creates duplicate Download rows.
+    candidate_urls: list[str] = []
+    for raw in req.ids:
+        hid = raw.strip()
+        if not hid or not hid.isdigit() or not (15 <= len(hid) <= 22):
+            skipped += 1
+            continue
+        candidate_urls.append(f"https://www.instagram.com/stories/highlights/{hid}/")
+    if candidate_urls:
+        existing_rows = (await db.execute(
+            select(Download.url).where(Download.url.in_(candidate_urls))
+        )).scalars().all()
+        existing_urls: set[str] = set(existing_rows)
+    else:
+        existing_urls = set()
+
+    for raw in req.ids:
+        hid = raw.strip()
+        if not hid or not hid.isdigit() or not (15 <= len(hid) <= 22):
+            continue
+        if hid in seen:
+            skipped += 1
+            continue
+        url = f"https://www.instagram.com/stories/highlights/{hid}/"
+        if url in existing_urls:
+            skipped += 1
+            continue
+        seen.add(hid)
+        url = f"https://www.instagram.com/stories/highlights/{hid}/"
+        d = Download(
+            platform="instagram",
+            source_type="link",
+            url=url,
+            title=f"HL {hid}",
+            author=user,
+            content_type="highlight",
+            status=DownloadStatus.PENDING,
+        )
+        db.add(d)
+        await db.flush()
+        created_ids.append(d.id)
+    await db.commit()
+    return FromHighlightIdsResponse(created=len(created_ids), skipped=skipped, ids=created_ids)
+
+
 @router.post("/run-pending", status_code=201)
 async def run_pending(
     platform: str = Query(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Take all pending downloads of a platform, create a Job, attach the
@@ -225,13 +315,23 @@ async def run_pending(
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Unknown platform: {platform}")
 
-    if job_runner.is_busy:
-        raise HTTPException(
-            status_code=409,
-            detail="Another job is currently running. Wait for it to finish or stop it first.",
-        )
+    # Serialize claims in the database, including across API worker processes.
+    from sqlalchemy import text
+    if db.bind and db.bind.dialect.name == "sqlite":
+        await db.execute(text("BEGIN IMMEDIATE"))
+    else:
+        await db.execute(text("SELECT pg_advisory_xact_lock(731204881)"))
+        active = (await db.execute(
+            select(Job.id).where(Job.status.in_([JobStatus.QUEUED, JobStatus.RUNNING])).limit(1)
+        )).scalar_one_or_none()
+        if active is not None:
+            await db.rollback()
+            raise HTTPException(status_code=409, detail="Another job is currently running")
 
-    # 1. Pick up all pending rows
+    if job_runner.is_busy:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Another job is currently running")
+
     rows = (await db.execute(
         select(Download).where(
             Download.platform == plat_enum.value,
@@ -240,9 +340,9 @@ async def run_pending(
     )).scalars().all()
 
     if not rows:
+        await db.commit()
         return {"marked": 0, "job_id": None, "items": []}
 
-    # 2. Create a Job row to own the run
     job = Job(
         job_type=JobType.UPDATE_LIST,
         status=JobStatus.QUEUED,
@@ -251,7 +351,7 @@ async def run_pending(
     db.add(job)
     await db.flush()  # get job.id
 
-    # 3. Attach downloads to the job and mark them as downloading
+    # Attach rows inside the same transaction as job creation.
     items: list[dict] = []
     for d in rows:
         d.status = DownloadStatus.DOWNLOADING
@@ -260,14 +360,10 @@ async def run_pending(
 
     await db.commit()
 
-    # 4. Hand off to the runner (background)
-    import asyncio
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    loop.create_task(job_runner.enqueue(job.id))
+    # 4. Hand off to the runner via BackgroundTasks so exceptions are
+    # surfaced to the task system (and logged) instead of being silently
+    # dropped by a fire-and-forget create_task.
+    background_tasks.add_task(job_runner.enqueue, job.id)
 
     return {"marked": len(items), "job_id": job.id, "items": items}
 

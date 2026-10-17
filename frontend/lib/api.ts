@@ -1,8 +1,12 @@
 import axios from "axios";
 
+// Use a relative `/api/...` base URL so the Next.js dev server proxy
+// (configured in next.config.js) handles the rewrite to the backend.
+// Falling back to a full origin only happens server-side where
+// `window` is undefined, so SSR doesn't depend on env vars either.
 const baseURL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
-  (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}` : "http://localhost:8000");
+  (typeof window !== "undefined" ? "" : "http://localhost:8000");
 
 export const api = axios.create({
   baseURL,
@@ -11,6 +15,26 @@ export const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+// Lightweight retry for transient failures: 5xx and network errors.
+// Skips 4xx (caller's fault, retrying won't help) and POST/PATCH/DELETE
+// (mutations — retry could double-charge). GET is idempotent and safe
+// to retry up to 2 times with a 400ms backoff.
+api.interceptors.response.use(
+  (r) => r,
+  async (err) => {
+    const config = err?.config;
+    if (!config || config.__retried || (config.method && config.method.toUpperCase() !== "GET")) {
+      throw err;
+    }
+    const status = err?.response?.status;
+    const transient = !status || status >= 500;
+    if (!transient) throw err;
+    config.__retried = true;
+    await new Promise((r) => setTimeout(r, 400));
+    return api.request(config);
+  }
+);
 
 export interface OverviewStats {
   total_accounts: number;
@@ -22,37 +46,6 @@ export interface OverviewStats {
   jobs_running: number;
   jobs_completed_24h: number;
   jobs_failed_24h: number;
-  by_platform: Record<string, number>;
-  size_by_platform: Record<string, number>;
-  pending_count: number;
-  downloads_24h: number;
-  downloads_7d: number;
-}
-
-export interface StorageBreakdown {
-  platform: string;
-  path: string;
-  exists: boolean;
-  file_count: number;
-  folder_count: number;
-  size_bytes: number;
-}
-
-export interface StorageStats {
-  total_size_bytes: number;
-  total_files: number;
-  total_folders: number;
-  free_bytes: number;
-  total_disk_bytes: number;
-  by_platform: StorageBreakdown[];
-}
-
-export interface TimelineBucket {
-  date: string;
-  count: number;
-}
-export interface TimelineResponse {
-  buckets: TimelineBucket[];
 }
 
 export interface Account {
@@ -116,6 +109,8 @@ export interface JobCreate {
 
 export interface Settings {
   download_folder: string;
+  twitter_download_folder: string;
+  tiktok_download_folder: string;
   cookie_folder: string;
   rate_limit_min_delay: number;
   rate_limit_max_delay: number;
@@ -138,6 +133,21 @@ export interface TwitterCookieItem {
 
 export interface TwitterCookieListResponse {
   items: TwitterCookieItem[];
+  total: number;
+}
+
+export interface TikTokCookieItem {
+  slot: "primary" | "backup";
+  file_name: string;
+  file_path: string;
+  size_bytes: number;
+  exists_on_disk: boolean;
+  uploaded_at: string | null;
+  last_used_at: string | null;
+}
+
+export interface TikTokCookieListResponse {
+  items: TikTokCookieItem[];
   total: number;
 }
 
@@ -242,4 +252,69 @@ export interface DownloadStats {
   total_size_bytes: number;
   last_24h: number;
   last_7d: number;
+}
+
+// ===== Dashboard (all-in-one payload) =====
+
+export interface MediaByTypeFE {
+  posts: number;
+  stories: number;
+  highlights: number;
+}
+
+export interface PlatformCountFE {
+  platform: "instagram" | "twitter" | "tiktok" | string;
+  accounts: number;
+  pending: number;
+  in_flight: number;
+  completed: number;
+  failed: number;
+  completed_24h: number;
+  bytes_total: number;
+  files_on_disk: number;
+  folders_on_disk: number;
+  last_download_at: string | null;
+}
+
+export interface TopAccountFE {
+  id: number;
+  username: string;
+  platform: string;
+  total_posts: number;
+  total_stories: number;
+  total_highlights: number;
+  total_size_bytes: number;
+  is_dead: boolean;
+  last_scanned_at: string | null;
+}
+
+export interface DashboardStatsFE {
+  total_accounts: number;
+  total_media: number;
+  media_by_type: MediaByTypeFE;
+  total_size_bytes: number;
+
+  disk_total_bytes: number;
+  disk_used_bytes: number;
+  disk_free_bytes: number;
+  files_on_disk: number;
+  folders_on_disk: number;
+
+  pending_count: number;
+  in_flight_count: number;
+  downloads_24h: number;
+  downloads_7d: number;
+  last_download_at: string | null;
+
+  jobs_running: number;
+  jobs_completed_24h: number;
+  jobs_failed_24h: number;
+  jobs_stopped_24h: number;
+  success_rate_24h: number;       // 0.0–1.0, -1 if no jobs in window
+
+  rate_limit_events_24h: number;
+  last_rate_limit_at: string | null;
+
+  by_platform: PlatformCountFE[];
+  top_accounts_by_size: TopAccountFE[];
 }

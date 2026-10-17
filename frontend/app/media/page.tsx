@@ -5,10 +5,12 @@ import { api, type Media } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
 import { useState } from "react";
 import { formatBytes, formatNumber, cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Search, Image as ImageIcon, Film, Sparkles, FileText } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, Image as ImageIcon, Film, Sparkles, FileText, Inbox } from "lucide-react";
 
 const TYPES = [
   { value: "", label: "All", icon: ImageIcon },
@@ -24,12 +26,8 @@ const mediaIcon = (t: string) => {
   return FileText;
 };
 
-const mediaColor = (t: string) => {
-  if (t === "post") return "from-primary/30 to-accent/30";
-  if (t === "story") return "from-success/30 to-accent/30";
-  if (t === "highlight") return "from-warning/30 to-primary/30";
-  return "from-muted to-muted";
-};
+// All media tiles share the same neutral surface — no per-type color.
+const mediaColor = (_t: string) => "bg-muted";
 
 export default function MediaPage() {
   const [page, setPage] = useState(1);
@@ -53,16 +51,12 @@ export default function MediaPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">
-          <span className="gradient-text">Media browser</span>
-        </h2>
-        <p className="text-muted-foreground mt-1">
-          {formatNumber(data?.total ?? 0)} files indexed
-        </p>
-      </div>
+      <PageHeader
+        title="Media browser"
+        description={`${formatNumber(data?.total ?? 0)} files indexed`}
+      />
 
-      <Card variant="glass" className="p-4">
+      <Card className="p-4">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -73,7 +67,7 @@ export default function MediaPage() {
                 setPage(1);
                 setSearch(e.target.value);
               }}
-              className="pl-9 bg-background/50"
+              className="pl-9 bg-background"
             />
           </div>
           <div className="flex gap-1">
@@ -87,10 +81,10 @@ export default function MediaPage() {
                     setType(t.value);
                   }}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border",
                     type === t.value
-                      ? "bg-gradient-to-r from-primary to-accent text-white shadow-glow-sm"
-                      : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -102,7 +96,7 @@ export default function MediaPage() {
         </div>
       </Card>
 
-      <Card variant="glass">
+      <Card>
         <CardHeader>
           <CardTitle className="text-base">
             {formatNumber(data?.total ?? 0)} files · page {page}
@@ -111,6 +105,12 @@ export default function MediaPage() {
         <CardContent>
           {isLoading ? (
             <div className="p-12 text-center text-muted-foreground">Loading...</div>
+          ) : data?.items.length === 0 ? (
+            <EmptyState
+              icon={Inbox}
+              title="Không tìm thấy file"
+              description={search || type ? "Thử bỏ filter hoặc đổi từ khoá." : "Chưa có file nào trong DB."}
+            />
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {data?.items.map((m: Media, i: number) => {
@@ -121,19 +121,19 @@ export default function MediaPage() {
                     href={m.file_path}
                     target="_blank"
                     rel="noreferrer"
-                    className="group relative overflow-hidden rounded-lg border border-white/5 bg-card/40 hover:border-primary/50 transition-all hover:-translate-y-0.5 fade-in-up"
+                    className="group relative overflow-hidden rounded-lg border border-border bg-card hover:border-foreground/30 transition-colors fade-in-up"
                     style={{ animationDelay: `${Math.min(i, 12) * 20}ms` }}
                   >
                     <div
                       className={cn(
-                        "aspect-square bg-gradient-to-br flex items-center justify-center relative overflow-hidden",
+                        "aspect-square flex items-center justify-center relative overflow-hidden",
                         mediaColor(m.media_type)
                       )}
                     >
-                      <Icon className="h-8 w-8 text-white/40 group-hover:text-white/80 group-hover:scale-110 transition-all" />
+                      <Icon className="h-8 w-8 text-muted-foreground group-hover:text-foreground group-hover:scale-110 transition-all" />
                       <Badge
                         variant="outline"
-                        className="absolute top-1.5 right-1.5 text-[9px] bg-black/40 backdrop-blur border-white/10"
+                        className="absolute top-1.5 right-1.5 text-[9px] bg-card/80 border-border"
                       >
                         {m.media_type}
                       </Badge>

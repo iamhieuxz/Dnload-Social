@@ -5,8 +5,11 @@ RUN npm install
 
 FROM node:20-alpine AS builder
 WORKDIR /app
+ARG API_INTERNAL_URL=http://localhost:8000
+ENV API_INTERNAL_URL=${API_INTERNAL_URL}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN mkdir -p public
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 

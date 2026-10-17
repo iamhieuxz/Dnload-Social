@@ -93,7 +93,10 @@ class AsyncProcessRunner:
             env=env,
         )
         self._pid = self._process.pid
-        logger.info("→ gallery-dl started (PID %s)", self._pid)
+        # Log the redacted command so cookie/archive/destination paths
+        # don't leak into the system log buffer (and from there to the
+        # broadcast /ws/system channel).
+        logger.info("→ gallery-dl started (PID %s) cmd=%s", self._pid, self._redact_cmd(safe_cmd))
         return self._process
 
     async def stream_output(self) -> AsyncIterator[str]:

@@ -29,17 +29,7 @@ router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 # has full stats so the Accounts page can render a card per account without
 # hitting /api/gallery/browse (which would be too slow for big trees).
 
-_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".avif", ".tiff", ".svg"}
-_VIDEO_EXTS = {".mp4", ".mov", ".webm", ".mkv", ".avi", ".flv", ".m4v", ".3gp"}
-
-
-def _classify(ext: str) -> str:
-    e = ext.lower()
-    if e in _IMAGE_EXTS:
-        return "image"
-    if e in _VIDEO_EXTS:
-        return "video"
-    return "other"
+from app.core.media_types import IMAGE_EXTS, VIDEO_EXTS, classify as _classify
 
 
 @router.get("/scan-from-disk")

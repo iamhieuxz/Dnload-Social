@@ -12,11 +12,10 @@ import asyncio
 import hashlib
 import logging
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -106,8 +105,16 @@ class MediaScanner:
         return await self._count_media_for(username)
 
     async def _scan_account(self, account_dir: Path, username: str) -> None:
+        # Shortcut: rglob can raise if the folder is deleted mid-scan
+        # (UI bulk delete, user clearing disk). Treat as an empty scan
+        # instead of 500-ing the whole endpoint.
+        try:
+            paths = list(account_dir.rglob("*"))
+        except OSError as e:
+            logger.warning("rglob failed for %s: %s", account_dir, e)
+            paths = []
         files: list[dict] = []
-        for path in account_dir.rglob("*"):
+        for path in paths:
             if not path.is_file():
                 continue
             if not path.suffix.lower() in IMAGE_EXTENSIONS:
@@ -141,22 +148,32 @@ class MediaScanner:
             },
         )
 
-        # Upsert media — use ON CONFLICT on file_path
+        # Upsert media — dialect-neutral. `merge()` requires a unique
+        # key on the model; `file_path` is not unique, so we check
+        # existence first and skip duplicates. Replaces the previous
+        # `pg_insert(...).on_conflict_do_nothing(...)` which is
+        # PostgreSQL-only and would have crashed on SQLite.
         async with session_scope() as session:
             account = await self._get_account(session, username)
             if account is None:
                 return
             for f in files:
-                stmt = pg_insert(Media).values(
-                    account_id=account.id,
-                    media_type=f["media_type"],
-                    file_path=f["file_path"],
-                    file_name=f["file_name"],
-                    shortcode=f["shortcode"],
-                    instagram_date=f["instagram_date"],
-                    file_size_bytes=f["file_size_bytes"],
-                ).on_conflict_do_nothing(index_elements=["file_path"])
-                await session.execute(stmt)
+                existing = await session.execute(
+                    select(Media.id).where(Media.file_path == f["file_path"]).limit(1)
+                )
+                if existing.scalar_one_or_none() is not None:
+                    continue
+                session.add(
+                    Media(
+                        account_id=account.id,
+                        media_type=f["media_type"],
+                        file_path=f["file_path"],
+                        file_name=f["file_name"],
+                        shortcode=f["shortcode"],
+                        instagram_date=f["instagram_date"],
+                        file_size_bytes=f["file_size_bytes"],
+                    )
+                )
 
     async def _upsert_account(
         self,
@@ -170,13 +187,13 @@ class MediaScanner:
                 account = Account(
                     username=username,
                     destination_folder=str(account_dir),
-                    first_scanned_at=datetime.utcnow(),
-                    last_scanned_at=datetime.utcnow(),
+                    first_scanned_at=datetime.now(timezone.utc),
+                    last_scanned_at=datetime.now(timezone.utc),
                 )
                 session.add(account)
                 await session.flush()
             else:
-                account.last_scanned_at = datetime.utcnow()
+                account.last_scanned_at = datetime.now(timezone.utc)
             if count_payload:
                 account.total_posts = count_payload["total_posts"]
                 account.total_stories = count_payload["total_stories"]

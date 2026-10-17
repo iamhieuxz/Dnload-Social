@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useJobWebSocket, type LogEvent } from "@/lib/websocket";
 import { Terminal } from "lucide-react";
@@ -10,39 +10,41 @@ interface Props {
   initialLogs?: string[];
 }
 
+const MAX_LINES = 2000;
+
 export function LogStream({ jobId, initialLogs = [] }: Props) {
+  // Lines live in state so React owns the DOM. The ref only tracks
+  // the previous-line-count for auto-scroll behaviour, NOT the text.
+  const [lines, setLines] = useState<string[]>(initialLogs);
   const containerRef = useRef<HTMLDivElement>(null);
-  const linesRef = useRef<string[]>(initialLogs);
 
   const { connected } = useJobWebSocket(jobId, (event: LogEvent) => {
     if (event.type === "log") {
-      linesRef.current = [...linesRef.current, event.data.message].slice(-2000);
-      render();
+      setLines((prev) => {
+        const next = prev.length >= MAX_LINES ? prev.slice(prev.length - MAX_LINES + 1) : prev.slice();
+        next.push(event.data.message);
+        return next;
+      });
     }
   });
 
+  // Reset when switching to a different job. Without this, lines from
+  // job A would leak into job B's view.
   useEffect(() => {
-    if (jobId) {
-      linesRef.current = [];
-      render();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId]);
+    setLines(initialLogs);
+  }, [jobId, initialLogs]);
 
-  function render() {
-    if (!containerRef.current) return;
-    const wasAtBottom =
-      containerRef.current.scrollHeight - containerRef.current.scrollTop - containerRef.current.clientHeight < 50;
-    containerRef.current.innerText = linesRef.current.join("\n");
-    if (wasAtBottom) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
-    }
-  }
-
+  // Auto-scroll only if the user is already pinned to the bottom;
+  // respect their scroll position otherwise. Using a ref so the
+  // effect runs on every lines change without re-binding the listener.
   useEffect(() => {
-    render();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialLogs]);
+    const el = containerRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distFromBottom < 50) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [lines]);
 
   return (
     <Card>
@@ -57,8 +59,10 @@ export function LogStream({ jobId, initialLogs = [] }: Props) {
       <CardContent>
         <div
           ref={containerRef}
-          className="h-[500px] overflow-y-auto rounded-md bg-black p-3 font-mono text-xs text-zinc-100 whitespace-pre-wrap"
-        />
+          className="h-[500px] overflow-y-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground whitespace-pre-wrap"
+        >
+          {lines.join("\n")}
+        </div>
       </CardContent>
     </Card>
   );

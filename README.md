@@ -4,6 +4,9 @@ Download manager cho **Instagram · Twitter/X · TikTok** — chạy local, giao
 
 Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục, ghi log thời gian thực, và **dừng giữa chừng rồi tiếp tục được** nhờ archive của gallery-dl.
 
+> 🚀 **Mới cài lần đầu?** Bắt đầu ở [Cài đặt nhanh](#cài-đặt-nhanh-sqlite--không-cần-docker).
+> ⚡ **Đã cài rồi, muốn mở lại?** Đọc [`docs/RUN.md`](docs/RUN.md) — chỉ 2 lệnh, 30 giây.
+
 ![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?style=flat-square&logo=fastapi)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python)
@@ -17,6 +20,7 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 - [Cách hoạt động](#cách-hoạt-động)
 - [Yêu cầu](#yêu-cầu)
 - [Cài đặt nhanh (SQLite — không cần Docker)](#cài-đặt-nhanh-sqlite--không-cần-docker)
+  - [📄 Hướng dẫn mở FE & BE hàng ngày](docs/RUN.md)
 - [Cài đặt với Docker](#cài-đặt-với-docker)
 - [Cấu hình](#cấu-hình)
 - [Hướng dẫn sử dụng](#hướng-dẫn-sử-dụng)
@@ -27,7 +31,7 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 - [Bảo mật](#bảo-mật)
 - [Đóng góp](#đóng-góp)
 - [Giấy phép](#giấy-phép)
-- [Tác giả](#tác giả)
+- [Tác giả](#tác-giả)
 
 ---
 
@@ -118,6 +122,8 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 ---
 
 ## Cài đặt nhanh (SQLite — không cần Docker)
+
+> 💡 **Sau khi cài xong, mỗi ngày chỉ cần 2 lệnh để chạy** — xem [`docs/RUN.md`](docs/RUN.md) (hướng dẫn ngắn, không cần đọc lại toàn bộ file này).
 
 ### 1. Tạo môi trường + cài backend
 

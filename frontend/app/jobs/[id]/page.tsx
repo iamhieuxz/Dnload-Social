@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LogStream } from "@/components/LogStream";
 import { JobStatusBadge } from "@/components/JobStatusBadge";
-import { ArrowLeft, StopCircle, Trash2 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
+import { ArrowLeft, StopCircle, Trash2, Loader2 } from "lucide-react";
 import { formatDuration } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -46,43 +47,49 @@ export default function JobDetailPage() {
     },
   });
 
-  if (!job) return <div>Loading...</div>;
+  if (!job) {
+    return (
+      <div className="flex items-center gap-2 p-12 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Đang tải job…
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/jobs")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h2 className="text-2xl font-bold">Job #{job.id}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              <JobStatusBadge status={job.status} />
-              <span className="text-sm text-muted-foreground">{job.job_type}</span>
-            </div>
+      <PageHeader
+        title={`Job #${job.id}`}
+        description={
+          <span className="flex items-center gap-2 flex-wrap">
+            <JobStatusBadge status={job.status} />
+            <span>{job.job_type}</span>
+          </span>
+        }
+        actions={
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => router.push("/jobs")} className="gap-1.5">
+              <ArrowLeft className="h-3.5 w-3.5" /> Quay lại
+            </Button>
+            {job.status === "running" && (
+              <Button variant="destructive" size="sm" onClick={() => stop.mutate()} className="gap-1.5">
+                <StopCircle className="h-3.5 w-3.5" /> Stop
+              </Button>
+            )}
+            {job.status !== "running" && (
+              <Button variant="outline" size="sm" onClick={() => remove.mutate()} className="gap-1.5">
+                <Trash2 className="h-3.5 w-3.5" /> Xoá
+              </Button>
+            )}
           </div>
-        </div>
-        <div className="flex gap-2">
-          {job.status === "running" && (
-            <Button variant="destructive" onClick={() => stop.mutate()}>
-              <StopCircle className="h-4 w-4" /> Stop
-            </Button>
-          )}
-          {job.status !== "running" && (
-            <Button variant="outline" onClick={() => remove.mutate()}>
-              <Trash2 className="h-4 w-4" /> Delete
-            </Button>
-          )}
-        </div>
-      </div>
+        }
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "New files", value: job.new_files_count },
           { label: "Total processed", value: job.total_processed },
           { label: "Duration", value: formatDuration(job.duration_seconds) },
-          { label: "Targets", value: job.targets ? JSON.parse(job.targets).length : 0 },
+          { label: "Targets", value: (() => { try { return job.targets ? JSON.parse(job.targets).length : 0; } catch { return 0; } })() },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="p-4">
@@ -104,7 +111,7 @@ export default function JobDetailPage() {
         </Card>
       )}
 
-      <LogStream jobId={job.status === "running" || job.status === "queued" ? id : id} initialLogs={logsData?.lines} />
+      <LogStream jobId={id} initialLogs={logsData?.lines} />
     </div>
   );
 }

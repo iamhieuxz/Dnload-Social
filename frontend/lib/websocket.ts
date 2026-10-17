@@ -1,13 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { api, type GalleryNode } from "@/lib/api";
 
+// Default to 127.0.0.1 instead of localhost. Browsers and Python
+// websockets both wait on IPv6→IPv4 fallback when the host is the
+// string "localhost", which can add 2+ seconds of latency per WS
+// handshake on Windows (Docker Desktop's loopback bridge is the
+// usual culprit). Using the numeric IP bypasses the lookup and the
+// fallback entirely.
+const _host =
+  typeof window !== "undefined" ? window.location.host : "localhost:8000";
+const _numericHost = _host.replace(/^localhost/, "127.0.0.1");
 const WS_BASE =
   process.env.NEXT_PUBLIC_WS_BASE_URL ||
   (typeof window !== "undefined"
-    ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`
-    : "ws://localhost:8000");
+    ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${_numericHost}`
+    : "ws://127.0.0.1:8000");
 
 export type LogEvent = {
   type: "log" | "status" | "job_update" | "download_update";
@@ -194,4 +203,208 @@ export function useSystemWebSocket(onEvent?: (e: LogEvent) => void) {
   }, []);
 
   return { connected, resetCursor: polling.resetCursor };
+}
+
+// ---- Gallery streaming tree ----
+//
+// Opens a WebSocket to /api/gallery/stream and accumulates FolderNode
+// messages into a partial tree as the server walks the filesystem.
+// Components can render folders whose `rel_path` is already in `nodes`,
+// and show a skeleton for any folder the walker hasn't reached yet.
+//
+// The hook tears down the WS as soon as `path` changes (or the
+// component unmounts), so navigating away stops the server walk at its
+// next folder boundary via the disconnect handler we wired up in
+// gallery.py.
+
+export type GalleryStreamNode = {
+  type: "node" | "batch" | "done" | "error";
+  // Single-node payload (kept for compatibility / debugging).
+  data?: GalleryNode | null;
+  // Batched payload — the server groups up to BATCH_SIZE nodes per
+  // message because each ws.send() is hundreds of µs through Docker
+  // Desktop's loopback bridge, and 300+ folder scans turn into
+  // several seconds of cumulative overhead.
+  nodes?: GalleryNode[];
+  total?: number;
+  detail?: string;
+};
+
+export function useGalleryStream(
+  key: string | null,
+  args: {
+    path: string | null;
+    depth?: number;
+    maxNodes?: number;
+    includeFiles?: boolean;
+  }
+) {
+  const { path, depth = 6, maxNodes = 8000, includeFiles = false } = args;
+  const [tree, setTree] = useState<GalleryNode | null>(null);
+  const [progress, setProgress] = useState<{ nodes: number; done: boolean; error: string | null }>({
+    nodes: 0,
+    done: false,
+    error: null,
+  });
+
+  useEffect(() => {
+    if (key === null || path === null) return;
+    setTree(null);
+    setProgress({ nodes: 0, done: false, error: null });
+    // Map rel_path -> node so we can attach each streamed node under its
+    // parent by rel_path. The walker sends the parent node first, so by
+    // the time children arrive the parent already has a slot in the map.
+    const byPath = new Map<string, GalleryNode>();
+    let cancelled = false;
+    // Reset lastRoot on every effect run — when path changes the new
+    // root may share a rel_path with a previous run (e.g. clicking
+    // back into a folder), and a stale `lastRoot` would otherwise be
+    // returned by `render()` and freeze the UI on the old subtree.
+    let lastRoot: GalleryNode | null = null;
+
+    // ----- HTTP fallback -----
+    // The Gallery page used to lock up if the WS died for any reason
+    // (proxy drop, IPv6 fallback hang, dev-server restart). We hit
+    // the cached /api/gallery/tree endpoint once and feed its result
+    // through the same attach() / render() pipeline. We only fall
+    // back when WS has not delivered useful data yet — a single
+    // root node alone doesn't count, since the user can't navigate
+    // to anything below it.
+    const tryHttpFallback = (reason: string) => {
+      if (cancelled) return;
+      if (byPath.size > 1) return;
+      const params = new URLSearchParams({
+        path,
+        depth: String(depth),
+        max_nodes: String(maxNodes),
+        include_files: String(includeFiles),
+      });
+      fetch(`/api/gallery/tree?${params}`)
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then((root: GalleryNode) => {
+          if (cancelled) return;
+          attach(root);
+          // Walk the full subtree so byPath has a slot for every
+          // sub-folder the user might click next.
+          const walk = (n: GalleryNode) => {
+            for (const c of n.children || []) {
+              attach(c);
+              walk(c);
+            }
+          };
+          walk(root);
+          render(byPath.size);
+          setProgress((p) => ({ ...p, done: true, error: `WS ${reason} — used HTTP fallback` }));
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          setProgress((p) => ({ ...p, error: `${reason}; HTTP fallback: ${e?.message ?? e}`, done: true }));
+        });
+    };
+
+    const url = `${WS_BASE}/api/gallery/stream`;
+    const ws = new WebSocket(url);
+    // 5s is enough for 488 nodes on the local box; if nothing
+    // arrives, assume the upgrade is dead and go fetch.
+    const fallbackTimer = window.setTimeout(() => {
+      if (byPath.size === 0) tryHttpFallback("timeout 5s");
+    }, 5000);
+    ws.onopen = () => {
+      ws.send(
+        JSON.stringify({
+          path,
+          depth,
+          max_nodes: maxNodes,
+          include_files: includeFiles,
+        })
+      );
+    };
+    // Nodes that arrived before their parent did. The walker sends the
+    // parent node first, but with batched messages a child can land in
+    // the same payload as its parent, or a batch can arrive a frame
+    // before the parent on a slow link. We keep an id -> node map and
+    // re-attach on every batch / single-node / done event.
+    const pendingChildren = new Map<string, GalleryNode>();
+    const attach = (n: GalleryNode) => {
+      byPath.set(n.rel_path, n);
+      pendingChildren.delete(n.rel_path);
+      const idx = n.rel_path.lastIndexOf("/");
+      let parentPath: string | null = null;
+      if (idx > 0) {
+        parentPath = n.rel_path.slice(0, idx);
+      } else if (idx < 0 && path === "" && n.rel_path) {
+        parentPath = ""; // direct child of gallery root
+      }
+      if (parentPath === null) return;
+      const parent = byPath.get(parentPath);
+      if (parent) {
+        parent.children = parent.children || [];
+        if (!parent.children.some((c) => c.rel_path === n.rel_path)) {
+          parent.children.push(n);
+        }
+      } else {
+        pendingChildren.set(n.rel_path, n);
+      }
+    };
+    const drainPending = () => {
+      // Re-attach everything in pending, leaving behind nodes whose
+      // parent still hasn't arrived. Bounded by pass count + a stop
+      // early-exit when no progress is made, so an orphan flood can't
+      // pin the event loop.
+      for (let pass = 0; pass < 25 && pendingChildren.size > 0; pass++) {
+        const before = pendingChildren.size;
+        for (const n of pendingChildren.values()) attach(n);
+        if (pendingChildren.size === before) break; // no progress
+      }
+    };
+    const render = (bump: number) => {
+      // The walker streams the requested folder as the root node, with
+      // rel_path == path (e.g. "instagram" when the user clicked that
+      // folder). The empty string only appears as the root rel_path
+      // when the user asked for the gallery root.
+      const root = byPath.get(path) || byPath.get("") || lastRoot;
+      if (!root) return;
+      lastRoot = root;
+      setTree({ ...root });
+      setProgress((p) => ({ ...p, nodes: p.nodes + bump }));
+    };
+    ws.onmessage = (msg) => {
+      try {
+        const ev: GalleryStreamNode = JSON.parse(msg.data);
+        if (ev.type === "node" && ev.data) {
+          attach(ev.data);
+          drainPending();
+          render(1);
+        } else if (ev.type === "batch" && ev.nodes) {
+          for (const n of ev.nodes) attach(n);
+          drainPending();
+          render(ev.nodes.length);
+        } else if (ev.type === "done") {
+          drainPending();
+          render(0);
+          setProgress((p) => ({ ...p, done: true, nodes: ev.total ?? p.nodes }));
+        } else if (ev.type === "error") {
+          setProgress((p) => ({ ...p, error: ev.detail ?? "stream error", done: true }));
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    ws.onerror = () => {
+      tryHttpFallback("error");
+    };
+    ws.onclose = () => {
+      tryHttpFallback("closed");
+    };
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallbackTimer);
+      try { ws.close(); } catch { /* ignore */ }
+    };
+  }, [key, path, depth, maxNodes, includeFiles]);
+
+  return { tree, ...progress };
 }

@@ -5,9 +5,11 @@ import { api, type Job } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { JobStatusBadge } from "@/components/JobStatusBadge";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
 import { formatDuration } from "@/lib/utils";
 import { useState } from "react";
-import { History, Filter } from "lucide-react";
+import { History, Filter, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STATUS_FILTERS = ["", "queued", "running", "completed", "stopped", "failed"] as const;
@@ -33,21 +35,22 @@ export default function JobsPage() {
           params: { page, page_size: 30, status: status || undefined },
         })
       ).data,
-    refetchInterval: 5_000,
+    // Only poll while a job is running/queued — once everything is
+    // terminal the list is stable and we can save the request budget.
+    refetchInterval: (query) => {
+      const items = (query.state.data?.items ?? []) as Job[];
+      return items.some((j) => j.status === "running" || j.status === "queued") ? 5_000 : false;
+    },
   });
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">
-          <span className="gradient-text">Job history</span>
-        </h2>
-        <p className="text-muted-foreground mt-1">
-          {data?.total ?? 0} jobs recorded
-        </p>
-      </div>
+      <PageHeader
+        title="Job history"
+        description={`${data?.total ?? 0} jobs recorded`}
+      />
 
-      <Card variant="glass" className="p-4">
+      <Card className="p-4">
         <div className="flex items-center gap-2 flex-wrap">
           <Filter className="h-4 w-4 text-muted-foreground" />
           {STATUS_FILTERS.map((s) => (
@@ -55,10 +58,10 @@ export default function JobsPage() {
               key={s}
               onClick={() => setStatus(s)}
               className={cn(
-                "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                "px-3 py-1.5 rounded-md text-xs font-medium transition-colors border",
                 status === s
-                  ? "bg-gradient-to-r from-primary to-accent text-white shadow-glow-sm"
-                  : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
               {STATUS_TABS[s]}
@@ -67,26 +70,35 @@ export default function JobsPage() {
         </div>
       </Card>
 
-      <Card variant="glass">
+      <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <History className="h-4 w-4 text-primary" />
+            <History className="h-4 w-4" />
             Recent jobs
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="divide-y divide-white/5">
-            {!data?.items.length ? (
-              <div className="p-12 text-center text-muted-foreground">No jobs found</div>
-            ) : (
-              data?.items.map((j: Job, i: number) => (
+          {!data?.items.length ? (
+            <EmptyState
+              icon={Inbox}
+              title="Chưa có job nào"
+              description={
+                status
+                  ? `Không có job nào ở trạng thái "${STATUS_TABS[status]}".`
+                  : "Chạy một job từ Dashboard để bắt đầu."
+              }
+              className="border-0"
+            />
+          ) : (
+            <div className="divide-y divide-border">
+              {data?.items.map((j: Job, i: number) => (
                 <Link
                   key={j.id}
                   href={`/jobs/${j.id}`}
-                  className="flex items-center gap-4 p-4 hover:bg-white/5 transition-colors group fade-in-up"
+                  className="flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors group fade-in-up"
                   style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-gradient-to-br from-primary/20 to-accent/20 font-mono text-sm font-bold">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted font-mono text-sm font-bold">
                     #{j.id}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -113,9 +125,9 @@ export default function JobsPage() {
                     </div>
                   </div>
                 </Link>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

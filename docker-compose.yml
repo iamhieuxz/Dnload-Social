@@ -1,41 +1,47 @@
 version: "3.9"
 
-services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: ig-postgres
-    environment:
-      POSTGRES_USER: iguser
-      POSTGRES_PASSWORD: igpass
-      POSTGRES_DB: igdownloader
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U iguser -d igdownloader"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+# PostgreSQL was removed because local-first read patterns (Gallery tree,
+# Stats overview) hit 1-2s latency per request through the docker bridge
+# for what is effectively a single-user DB. SQLite local file is ~10x
+# faster for this workload — the job runner already serializes all writes
+# behind an advisory lock, so we don't need PG's concurrent writers.
+#
+# To re-enable Postgres: uncomment the `postgres` service below and switch
+# DATABASE_URL to postgresql+asyncpg://iguser:igpass@postgres:5432/igdownloader
 
+services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: ig-backend
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://iguser:igpass@postgres:5432/igdownloader
-      DOWNLOAD_FOLDER: /data/downloads
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:////data/igdownloader.db}
+      DOWNLOAD_FOLDER: /data/downloads/instagram
+      TWITTER_DOWNLOAD_FOLDER: /data/downloads/twitter
+      TIKTOK_DOWNLOAD_FOLDER: /data/downloads/tiktok
       COOKIE_FOLDER: /data/secrets/cookies
+      COOKIE_ENCRYPTION_KEY: ${COOKIE_ENCRYPTION_KEY:?Set COOKIE_ENCRYPTION_KEY in the environment}
+      LOCAL_API_BEHIND_LOOPBACK_PROXY: "true"
       LOG_LEVEL: INFO
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
-      - downloads:/data/downloads
+      - E:/gallery-dl:/data/downloads
+      - ./backend/data:/data
       - cookies:/data/secrets/cookies
+    # Shortcut: healthcheck uses /api/health so `depends_on: { backend:
+    # condition: service_healthy }` on the frontend blocks until the
+    # DB + Fernet are both up. Without this, the first browser hit
+    # after `docker compose up` lands in a 502 because uvicorn is
+    # already listening but the lifespan startup sweep is still
+    # running.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
     command: >
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000"
@@ -45,18 +51,20 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
+        API_INTERNAL_URL: http://backend:8000
         NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
         NEXT_PUBLIC_WS_BASE_URL: ws://localhost:8000
     container_name: ig-frontend
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
       NEXT_PUBLIC_WS_BASE_URL: ws://localhost:8000
 
 volumes:
-  pg_data:
-  downloads:
   cookies:

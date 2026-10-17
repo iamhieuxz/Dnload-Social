@@ -1,170 +1,97 @@
 @echo off
 chcp 65001 >nul
-setlocal EnableDelayedExpansion
-
-REM ============================================================================
-REM  Instagram Downloader v7.0 — One-Click Launcher (Windows CMD)
-REM  Chạy:  start.bat
-REM  Dừng:  stop.bat    (hoặc nhấn Ctrl+C)
-REM ============================================================================
-
+setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-set LOGS_DIR=%CD%\logs
-set PIDS_DIR=%CD%\.pids
-if not exist "%LOGS_DIR%" mkdir "%LOGS_DIR%"
-if not exist "%PIDS_DIR%" mkdir "%PIDS_DIR%"
-
 echo.
-echo   =======================================================
-echo     Instagram Downloader v7.0  -  One-Click Launcher
-echo   =======================================================
+echo   ===============================================
+echo     Dnload Social - Docker One-Click Launcher
+echo   ===============================================
 echo.
 
-REM ---- Check prerequisites ----
-echo   [1/6] Kiem tra moi truong...
-where python >nul 2>&1 || (echo   [X] Python chua cai & exit /b 1)
-where node   >nul 2>&1 || (echo   [X] Node.js chua cai & exit /b 1)
-where docker >nul 2>&1 || (echo   [X] Docker chua cai & exit /b 1)
-docker info >nul 2>&1 || (echo   [X] Docker Desktop chua chay & exit /b 1)
-echo   [OK] Python / Node / Docker OK
-echo.
-
-REM ---- PostgreSQL ----
-echo   [2/6] Khoi dong PostgreSQL...
-docker ps -a --format "{{.Names}}" | findstr /B "ig-postgres" >nul 2>&1
-if %errorlevel%==0 (
-    docker ps --format "{{.Names}}" | findstr /B "ig-postgres" >nul 2>&1
-    if %errorlevel%==0 (
-        echo   [OK] Container ig-postgres dang chay
-    ) else (
-        echo   [..] Starting existing container...
-        docker start ig-postgres >nul
-    )
-) else (
-    echo   [..] Tao container moi...
-    docker run -d --name ig-postgres -e POSTGRES_USER=iguser -e POSTGRES_PASSWORD=igpass -e POSTGRES_DB=igdownloader -p 5432:5432 -v ig_pg_data:/var/lib/postgresql/data postgres:16-alpine >nul
-)
-echo   [OK] PostgreSQL OK
-echo.
-
-REM ---- Backend env + venv ----
-echo   [3/6] Chuan bi Backend...
-if not exist "backend\.env" copy "backend\.env.example" "backend\.env" >nul
-
-if not exist "backend\.venv\Scripts\python.exe" (
-    echo   [..] Tao Python venv...
-    python -m venv backend\.venv
+where docker >nul 2>&1
+if errorlevel 1 (
+    echo   [X] Docker CLI was not found. Install Docker Desktop first.
+    pause
+    exit /b 1
 )
 
-set PY=backend\.venv\Scripts\python.exe
+docker info >nul 2>&1
+if not errorlevel 1 goto DOCKER_READY
+echo   [..] Starting Docker Desktop...
+if not exist "%ProgramFiles%\Docker\Docker\Docker Desktop.exe" goto DOCKER_MISSING
+start "" "%ProgramFiles%\Docker\Docker\Docker Desktop.exe"
+set /a WAIT=0
 
-echo   [..] Cai dat Python dependencies (lan dau co the mat 1-2 phut)...
-"%PY%" -m pip install --quiet --disable-pip-version-check -r backend\requirements.txt
-if %errorlevel% neq 0 (echo   [X] pip install that bai & exit /b 1)
-echo   [OK] Backend deps OK
-echo.
+:WAIT_DOCKER
+docker info >nul 2>&1
+if not errorlevel 1 goto DOCKER_READY
+set /a WAIT+=1
+if !WAIT! geq 60 goto DOCKER_TIMEOUT
+timeout /t 2 /nobreak >nul
+goto WAIT_DOCKER
 
-REM ---- Migrations ----
-echo   [4/6] Chay Alembic migrations...
-"%PY%" -m alembic upgrade head
-echo   [OK] Schema san sang
-echo.
-
-REM ---- Start backend in background ----
-echo   [5/6] Khoi dong Backend (port 8000)...
-if exist "%PIDS_DIR%\backend.pid" (
-    for /f %%i in (%PIDS_DIR%\backend.pid) do taskkill /F /T /PID %%i >nul 2>&1
-    del %PIDS_DIR%\backend.pid
-)
-
-set BACKEND_LOG=%LOGS_DIR%\backend.log
-start /min "IG-Backend" cmd /c "cd backend && "%PY%" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > "%BACKEND_LOG%" 2>&1"
-echo %errorlevel% > %PIDS_DIR%\backend.pid
-
-REM Wait for backend
-echo   [..] Doi backend san sang...
-set /a elapsed=0
-:WAIT_BACKEND
-if %elapsed% geq 30 goto :BACKEND_FAIL
-powershell -NoProfile -Command "try { (Invoke-WebRequest -Uri 'http://localhost:8000/api/health' -UseBasicParsing -TimeoutSec 2).StatusCode } catch { exit 1 }" >nul 2>&1
-if %errorlevel%==0 goto :BACKEND_OK
-set /a elapsed+=1
-ping -n 2 127.0.0.1 >nul
-goto :WAIT_BACKEND
-:BACKEND_OK
-echo   [OK] Backend OK
-goto :BACKEND_DONE
-:BACKEND_FAIL
-echo   [X] Backend khong khoi dong duoc. Xem logs\backend.log
+:DOCKER_MISSING
+echo   [X] Docker Desktop was not found. Start it manually, then retry.
+pause
 exit /b 1
-:BACKEND_DONE
-echo.
 
-REM ---- Frontend ----
-echo   [6/6] Chuan bi va khoi dong Frontend (port 3000)...
-if not exist "frontend\node_modules" (
-    echo   [..] npm install (lan dau co the mat 2-5 phut)...
-    cd frontend
-    call npm install --no-audit --no-fund --loglevel=error
-    if %errorlevel% neq 0 (echo   [X] npm install that bai & exit /b 1)
-    cd ..
+:DOCKER_TIMEOUT
+echo   [X] Docker engine did not become ready within 60 seconds.
+pause
+exit /b 1
+
+:DOCKER_READY
+echo   [OK] Docker engine is ready
+
+if defined COOKIE_ENCRYPTION_KEY goto KEY_READY
+set "ENV_COOKIE_KEY="
+if exist ".env" (
+    for /f "usebackq tokens=1,* delims==" %%A in (`findstr /b /i "COOKIE_ENCRYPTION_KEY=" ".env"`) do set "ENV_COOKIE_KEY=%%B"
 )
-echo   [OK] Frontend deps OK
-
-if exist "%PIDS_DIR%\frontend.pid" (
-    for /f %%i in (%PIDS_DIR%\frontend.pid) do taskkill /F /T /PID %%i >nul 2>&1
-    del %PIDS_DIR%\frontend.pid
+if defined ENV_COOKIE_KEY (
+    set "COOKIE_ENCRYPTION_KEY=!ENV_COOKIE_KEY!"
+    goto KEY_READY
 )
 
-set FRONTEND_LOG=%LOGS_DIR%\frontend.log
-start /min "IG-Frontend" cmd /c "cd frontend && npx next dev -p 3000 > "%FRONTEND_LOG%" 2>&1"
+    echo   [..] Generating a persistent Fernet key in .env...
+    for /f "delims=" %%K in ('powershell -NoProfile -Command "$b=New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b).Replace('+','-').Replace('/','_')"') do set "COOKIE_ENCRYPTION_KEY=%%K"
+    if not defined COOKIE_ENCRYPTION_KEY (
+        echo   [X] Could not generate COOKIE_ENCRYPTION_KEY.
+        pause
+        exit /b 1
+    )
+    >>".env" echo COOKIE_ENCRYPTION_KEY=%COOKIE_ENCRYPTION_KEY%
 
-echo   [..] Doi frontend san sang (lan dau co the mat 30-60s compile)...
-set /a elapsed=0
-:WAIT_FRONTEND
-if %elapsed% geq 90 goto :FRONTEND_WARN
-powershell -NoProfile -Command "try { (Invoke-WebRequest -Uri 'http://localhost:3000' -UseBasicParsing -TimeoutSec 2).StatusCode } catch { exit 1 }" >nul 2>&1
-if %errorlevel%==0 goto :FRONTEND_OK
-set /a elapsed+=1
-ping -n 2 127.0.0.1 >nul
-goto :WAIT_FRONTEND
-:FRONTEND_OK
-echo   [OK] Frontend OK
-goto :FRONTEND_DONE
-:FRONTEND_WARN
-echo   [!] Frontend cham phan hoi (dang compile?). Kiem tra logs\frontend.log
-:FRONTEND_DONE
-echo.
+:KEY_READY
 
-REM ---- Done ----
-echo   =======================================================
-echo     *  HE THONG DA SAN SANG  *
-echo   =======================================================
-echo.
-echo     Web UI:       http://localhost:3000
-echo     Backend API:  http://localhost:8000/docs
-echo     PostgreSQL:   localhost:5432  (iguser/igpass/igdownloader)
-echo.
-echo     Logs:         .\logs\backend.log
-echo                   .\logs\frontend.log
-echo     Dung tat ca:  .\stop.bat
-echo.
+echo   [..] Building and starting Docker Compose services...
+docker compose up --build -d
+if errorlevel 1 (
+    echo   [X] Docker Compose failed. Inspect output above and run:
+    echo       docker compose logs
+    pause
+    exit /b 1
+)
 
-REM Open browser
+echo   [..] Waiting for backend and frontend...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; foreach ($url in @('http://localhost:8000/api/health','http://localhost:3000')) { $ready=$false; for ($i=0; $i -lt 90; $i++) { try { $r=Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 3; if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 400) { $ready=$true; break } } catch {}; Start-Sleep -Seconds 2 }; if (-not $ready) { Write-Error ('Timed out waiting for ' + $url); exit 1 } }; exit 0"
+if errorlevel 1 (
+    echo   [X] A service did not become ready. Inspect with: docker compose logs
+    pause
+    exit /b 1
+)
+
+echo.
+echo   ===============================================
+echo     Services are ready
+echo   ===============================================
+echo     Web UI:      http://localhost:3000
+echo     Backend API: http://127.0.0.1:8000/docs
+echo.
+echo     Stop stack:  stop.bat
+echo     Logs:        docker compose logs -f
+echo.
 start "" "http://localhost:3000"
-
-echo   Nhan phim bat ky de dung tat ca service...
-pause >nul
-
-REM Cleanup
-if exist "%PIDS_DIR%\backend.pid" (
-    for /f %%i in (%PIDS_DIR%\backend.pid) do taskkill /F /T /PID %%i >nul 2>&1
-    del %PIDS_DIR%\backend.pid
-)
-if exist "%PIDS_DIR%\frontend.pid" (
-    for /f %%i in (%PIDS_DIR%\frontend.pid) do taskkill /F /T /PID %%i >nul 2>&1
-    del %PIDS_DIR%\frontend.pid
-)
-echo   Da dung tat ca service.
-endlocal
+pause
+exit /b 0

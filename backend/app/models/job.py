@@ -20,11 +20,6 @@ class JobType(str, enum.Enum):
     UPDATE_LIST = "update_list"
     UPDATE_ALL = "update_all"
     SINGLE = "single"
-    # Granular IG layers — each becomes its own queued run to avoid hitting
-    # Instagram with one giant session that triggers rate-limits.
-    IG_POSTS = "ig_posts"
-    IG_STORIES = "ig_stories"
-    IG_HIGHLIGHTS = "ig_highlights"
 
 
 class JobStatus(str, enum.Enum):

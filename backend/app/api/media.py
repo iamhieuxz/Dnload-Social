@@ -11,8 +11,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Media
 from app.schemas import MediaListResponse, MediaOut
+from app.config import get_settings
+from app.core.url_guard import is_path_inside_any
 
 router = APIRouter(prefix="/api/media", tags=["media"])
+
+
+def _allowed_media_roots() -> list[Path]:
+    s = get_settings()
+    roots: list[Path] = []
+    for getter in (s.get_download_folder, s.get_twitter_download_folder, s.get_tiktok_download_folder):
+        try:
+            roots.append(getter())
+        except Exception:
+            continue
+    return roots
 
 
 @router.get("", response_model=MediaListResponse)
@@ -54,6 +67,9 @@ async def get_media_file(media_id: int, db: AsyncSession = Depends(get_db)) -> F
     media = await db.get(Media, media_id)
     if media is None:
         raise HTTPException(status_code=404, detail="Media not found")
+    if not is_path_inside_any(media.file_path, _allowed_media_roots()):
+        # Row points outside any download folder — refuse to serve.
+        raise HTTPException(status_code=403, detail="File path not allowed")
     if not os.path.exists(media.file_path):
         raise HTTPException(status_code=410, detail="File missing on disk")
     return FileResponse(media.file_path, filename=media.file_name)
@@ -65,11 +81,27 @@ async def delete_media(media_id: int, db: AsyncSession = Depends(get_db), delete
     if media is None:
         raise HTTPException(status_code=404, detail="Media not found")
     file_path = media.file_path
-    await db.delete(media)
-    await db.commit()
-    if delete_file:
+    # Refuse to delete a file that lives outside the configured
+    # download folders — protects against a row pointing at
+    # arbitrary host paths.
+    file_in_scope = is_path_inside_any(file_path, _allowed_media_roots())
+    # Shortcut: drop the file FIRST when asked, so a delete failure
+    # doesn't leave a DB row pointing at nothing. The old order
+    # (DB commit → file remove) silently orphaned the file on
+    # permission errors and made the row a tombstone. If the file
+    # removal fails, we still delete the row and return an error
+    # so the UI can surface it; the user can retry or clean up.
+    file_error: str | None = None
+    if delete_file and file_in_scope and os.path.exists(file_path):
         try:
             os.remove(file_path)
-        except OSError:
-            pass
-    return {"deleted": media_id}
+        except OSError as e:
+            file_error = str(e)
+    elif delete_file and not file_in_scope:
+        file_error = "file path outside download folders; skipped"
+    await db.delete(media)
+    await db.commit()
+    result: dict = {"deleted": media_id}
+    if file_error:
+        result["file_error"] = file_error
+    return result

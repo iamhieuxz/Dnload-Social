@@ -30,7 +30,7 @@ from app.core.rate_limit import RateLimitGuard, RateLimitPolicy
 
 logger = logging.getLogger(__name__)
 
-IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov")
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".m4v", ".heic", ".avif")
 
 
 @dataclass(slots=True)
@@ -110,6 +110,8 @@ class InstagramService:
         target: str,
         cookie_files: list[str] | None = None,
         content_type: str | None = None,
+        author: str | None = None,
+        run_id: str | None = None,
     ) -> AsyncIterator[dict]:
         """JobRunner entry point — download one URL / username.
 
@@ -119,6 +121,11 @@ class InstagramService:
           - "highlight" → grab highlights (Layer 3)
           - None        → legacy callers, treat as posts
 
+        `author` is the username the row was created against (for highlight
+        rows the user gave us at /from-highlight-ids time). It is only used
+        by the highlight branch to pick a destination folder; the other
+        branches ignore it and keep deriving the folder from the URL.
+
         Yields events: user_start, media, warn, error, user_done.
         """
         layer = (content_type or "post").lower()
@@ -127,7 +134,7 @@ class InstagramService:
                 yield event
             return
         if layer == "highlight":
-            async for event in self.add_highlights(target, cookie_files or []):
+            async for event in self.add_highlights(target, cookie_files or [], author=author):
                 yield event
             return
         # default → posts
@@ -181,11 +188,44 @@ class InstagramService:
         self,
         target: str,
         cookie_files: list[str],
+        author: str | None = None,
     ) -> AsyncIterator[dict]:
         """Download all highlights of a user (Layer 3).
 
         Writes under <base>/<user>/HL_* so the file tree is self-documenting.
+
+        Supports two URL shapes:
+          - https://www.instagram.com/<user>/highlights/  (broken: IG API
+            now requires follow + browser; kept for fallback)
+          - https://www.instagram.com/stories/highlights/<id>/  (works:
+            a single known highlight reel ID)
+
+        For the second shape, the URL itself has no username — we either use
+        the `author` the caller passes (the user that was attached to the
+        row when the highlight IDs were imported) or fall back to the reel
+        id so files still go somewhere instead of leaking into the base.
         """
+        # If target is a direct /stories/highlights/<id> URL, use it as-is.
+        if "/stories/highlights/" in target:
+            normalized = self._normalize_target(target)
+            parts = [p for p in normalized.rstrip("/").split("/") if p]
+            # parts = ["stories", "highlights", "<id>"]
+            reel_id = parts[-1] if parts else "highlight"
+            # Prefer the username the row was created against; otherwise
+            # the reel id (better than dumping files at the base).
+            folder_name = (author or "").lstrip("@").strip() or reel_id
+            dest = self._resolve_dest(folder_name)
+            os.makedirs(dest, exist_ok=True)
+            url = target.split("?")[0].split("#")[0]
+            if not url.endswith("/"):
+                url = url + "/"
+            async for event in self._download_with_fallback(
+                url, dest, cookie_files,
+                limit_range=None, disable_range=True, prefix="HL_",
+            ):
+                yield event
+            return
+
         normalized = self._normalize_target(target)
         username = self._derive_dest_name(normalized)
         dest = self._resolve_dest(username)
@@ -438,14 +478,16 @@ class InstagramService:
         temp_cookie = None
         actual_cookie = cookie_file
         if cookie_file and Path(cookie_file).exists():
-            fd, temp_cookie = tempfile.mkstemp(suffix=".txt", prefix="ig_cookie_")
-            os.close(fd)
             try:
-                import shutil
-                shutil.copy2(cookie_file, temp_cookie)
+                # Cookie files on disk are Fernet-encrypted at rest (see
+                # `core.cookie_vault.encrypt_cookie`). gallery-dl needs the
+                # plaintext Netscape file, so decrypt into a temp file the
+                # process owns; the OS will reap it on exit.
+                from app.core.cookie_vault import decrypt_cookie_file
+                temp_cookie = decrypt_cookie_file(Path(cookie_file))
                 actual_cookie = temp_cookie
             except Exception:
-                logger.warning("Could not stage temp cookie; using original")
+                logger.warning("Could not stage decrypted temp cookie; using original", exc_info=True)
                 temp_cookie = None
 
         try:
@@ -462,9 +504,8 @@ class InstagramService:
                 if not stripped:
                     continue
 
-                # Log progress / informational lines
-                if any(t in lower for t in ("[instagram]", "[info]", "downloading", "extracting")):
-                    logger.info("gallery-dl: %s", stripped)
+                # gallery-dl progress lines stay in stdout (root logger
+                # handler) but never reach the UI terminal.
 
                 if self.guard.detect_limit_signal(stripped):
                     yield {"type": "limit_signal", "line": stripped}
@@ -476,6 +517,13 @@ class InstagramService:
 
                 if any(t in lower for t in ("time out", "timeout", "connection reset", "network unreachable", "10054")):
                     yield {"type": "warn", "code": "network", "line": stripped}
+                    continue
+
+                # TikTok 403 / Forbidden: gallery-dl prints this when the
+                # public CDN rejects the IP. Check BEFORE the generic
+                # engine_error branch so the more specific code wins.
+                if "403" in stripped or "forbidden" in lower:
+                    yield {"type": "warn", "code": "forbidden", "line": stripped}
                     continue
 
                 if any(t in lower for t in ("[error]", "error:", "exception", "failed", "404 not found", "permission")):
@@ -490,7 +538,19 @@ class InstagramService:
                 is_new = not stripped.startswith("#")
                 clean_path = stripped.lstrip("#").strip()
                 filename = os.path.basename(clean_path)
-                marker = "📥" if is_new else "·"
+                # Some gallery-dl extractors (notably TikTok when the
+                # response is rate-limited) emit a file path whose filename
+                # starts with "None_" because the {id} field was unavailable.
+                # Treat those as failures: they are zero-byte placeholder
+                # files and would otherwise count as a successful download.
+                if filename.startswith("None_") or filename.lower() == "none":
+                    logger.warning("Discarding empty/None-named file from gallery-dl: %s", filename)
+                    saw_media = False
+                    self._total_processed -= 1
+                    yield {"type": "warn", "code": "empty_file", "line": filename}
+                    continue
+
+                marker = "[NEW]" if is_new else "[SKIP]"
                 logger.info("%s %s", marker, filename)
                 if is_new:
                     self._new_files_count += 1

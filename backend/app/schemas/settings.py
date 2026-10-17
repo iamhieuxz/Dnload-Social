@@ -5,6 +5,8 @@ from pydantic import BaseModel
 
 class SettingsOut(BaseModel):
     download_folder: str
+    twitter_download_folder: str = ""
+    tiktok_download_folder: str = ""
     cookie_folder: str
     rate_limit_min_delay: int
     rate_limit_max_delay: int

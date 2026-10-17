@@ -9,13 +9,27 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
+import time
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
+
+# How many messages per second the "system" channel will accept from
+# broadcast_sync (the noisy one fed by the log handler). Anything above
+# this gets dropped at the manager, so the WebSocket send loop never
+# gets swamped and the React UI stops stuttering. Per-job channels and
+# the async broadcast() are NOT throttled — they're called by code
+# paths that already produce one event per meaningful state change.
+_SYSTEM_MAX_PER_SECOND = 20
+_system_dropped_total: int = 0
+_system_window_start: float = 0.0
+_system_window_count: int = 0
+_system_window_lock = threading.Lock()
 
 
 class WebSocketManager:
@@ -39,7 +53,7 @@ class WebSocketManager:
             {
                 "type": event_type,
                 "channel": channel,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "data": data,
             },
             default=str,
@@ -60,12 +74,33 @@ class WebSocketManager:
         Tries the running loop first; if there is none, we fall back to the
         global loop that uvicorn keeps alive, so logs from worker threads
         are never silently dropped.
+
+        The "system" channel is throttled: gallery-dl / yt-dlp can print
+        dozens of lines per second, and broadcasting every single one
+        pushes hundreds of JSON-encoded messages per second at the React
+        UI, which then re-renders the Live terminal panel and stutters.
+        We cap the channel at _SYSTEM_MAX_PER_SECOND messages and drop
+        the excess — the per-job channel is unaffected because users
+        looking at a single job want every line, and the buffer in
+        logging_config still keeps the full stream for the API endpoint.
         """
+        if channel == "system" and event_type == "log":
+            global _system_window_count, _system_window_start, _system_dropped_total
+            with _system_window_lock:
+                now = time.monotonic()
+                if now - _system_window_start >= 1.0:
+                    _system_window_start = now
+                    _system_window_count = 0
+                if _system_window_count >= _SYSTEM_MAX_PER_SECOND:
+                    _system_dropped_total += 1
+                    return
+                _system_window_count += 1
+
         message = json.dumps(
             {
                 "type": event_type,
                 "channel": channel,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "data": data,
             },
             default=str,
@@ -110,6 +145,23 @@ def bind_event_loop(loop: asyncio.AbstractEventLoop) -> None:
     """Call this once from the FastAPI startup hook with the main loop."""
     global _fastapi_loop
     _fastapi_loop = loop
+
+
+def get_throttle_stats() -> dict:
+    """Diagnostic counter — how many messages were dropped by the system-
+    channel throttle. Useful for checking the front-end isn't starving."""
+    return {
+        "dropped_total": _system_dropped_total,
+        "max_per_second": _SYSTEM_MAX_PER_SECOND,
+    }
+
+
+def reset_throttle_stats() -> None:
+    global _system_dropped_total, _system_window_count, _system_window_start
+    with _system_window_lock:
+        _system_dropped_total = 0
+        _system_window_count = 0
+        _system_window_start = 0.0
 
 
 ws_manager = WebSocketManager()

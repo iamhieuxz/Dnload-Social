@@ -38,7 +38,40 @@ export default function GalleryPage() {
   const [currentPath, setCurrentPath] = useState("");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selected, setSelected] = useState<GalleryFileInfo | null>(null);
+  // Currently-open file in the right-side drawer. We also keep the
+  // sibling list + index so arrow keys can step to the next/prev file
+  // in the same folder or search result without leaving the drawer.
+  const [selected, setSelected] = useState<{
+    file: GalleryFileInfo;
+    siblings: { rel_path: string }[];
+    index: number;
+  } | null>(null);
+
+  // Arrow keys step through siblings while a file is open in the
+  // drawer. Listener is on `window` (not the drawer) so it works
+  // regardless of which element has focus; we skip the key when the
+  // user is typing in a text field.
+  useEffect(() => {
+    if (!selected) return;
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (!selected) return;
+      let next: number | null = null;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") next = selected.index + 1;
+      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = selected.index - 1;
+      else if (e.key === "Escape") { setSelected(null); return; }
+      if (next === null) return;
+      if (next < 0 || next >= selected.siblings.length) return;
+      e.preventDefault();
+      const nextFile = selected.siblings[next];
+      api.get<GalleryFileInfo>("/api/gallery/file", { params: { path: nextFile.rel_path } })
+        .then((r) => setSelected({ file: r.data, siblings: selected.siblings, index: next! }))
+        .catch(() => { /* keep current file if fetch fails */ });
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected]);
   const [statsOpen, setStatsOpen] = useState(false);
   // Display + sort preferences (persisted in localStorage so the choice
   // survives page reloads).
@@ -259,9 +292,9 @@ export default function GalleryPage() {
             <SearchResults
               result={searchResult}
               loading={searchLoading}
-              onSelect={async (item) => {
+              onSelect={async (item, siblings, index) => {
                 const r = await api.get<GalleryFileInfo>("/api/gallery/file", { params: { path: item.rel_path } });
-                setSelected(r.data);
+                setSelected({ file: r.data, siblings, index });
               }}
               viewMode={viewMode}
               sortKey={sortKey}
@@ -270,9 +303,9 @@ export default function GalleryPage() {
           ) : tree ? (
             <FolderView
               node={tree}
-              onOpenFile={async (file) => {
+              onOpenFile={async (file, siblings, index) => {
                 const r = await api.get<GalleryFileInfo>("/api/gallery/file", { params: { path: file.rel_path } });
-                setSelected(r.data);
+                setSelected({ file: r.data, siblings, index });
               }}
               onEnterFolder={(child) => navigateTo(child.rel_path)}
               currentPath={currentPath}
@@ -291,7 +324,7 @@ export default function GalleryPage() {
       </div>
 
       {selected && (
-        <FileDrawer file={selected} onClose={() => setSelected(null)} onChanged={refresh} qc={qc} />
+        <FileDrawer file={selected.file} onClose={() => setSelected(null)} onChanged={refresh} qc={qc} />
       )}
     </div>
   );
@@ -420,7 +453,7 @@ function FolderView({
   sortDir,
 }: {
   node: GalleryNode;
-  onOpenFile: (f: GalleryNode) => void;
+  onOpenFile: (f: GalleryNode, siblings: GalleryNode[], index: number) => void;
   onEnterFolder: (f: GalleryNode) => void;
   currentPath: string;
   qc: ReturnType<typeof useQueryClient>;
@@ -498,7 +531,7 @@ function FolderView({
             {viewMode === "grid" ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-3">
                 {sortedFiles.map((f, i) => (
-                  <FileCard key={f.rel_path} node={f} onClick={() => onOpenFile(f)} delay={i} />
+                  <FileCard key={f.rel_path} node={f} onClick={() => onOpenFile(f, sortedFiles, i)} delay={i} />
                 ))}
               </div>
             ) : (
@@ -507,7 +540,7 @@ function FolderView({
                   <FileRow
                     key={f.rel_path}
                     node={f}
-                    onClick={() => onOpenFile(f)}
+                    onClick={() => onOpenFile(f, sortedFiles, i)}
                     delay={i}
                   />
                 ))}
@@ -769,7 +802,7 @@ function SearchResults({
 }: {
   result: { total: number; items: GallerySearchItem[] } | undefined;
   loading: boolean;
-  onSelect: (item: GallerySearchItem) => void | Promise<void>;
+  onSelect: (item: GallerySearchItem, siblings: GallerySearchItem[], index: number) => void | Promise<void>;
   sortKey: "name" | "ctime";
   sortDir: "asc" | "desc";
   viewMode: "grid" | "list";
@@ -814,7 +847,7 @@ function SearchResults({
               return (
                 <button
                   key={it.rel_path + i}
-                  onClick={() => onSelect(it)}
+                  onClick={() => onSelect(it, sorted, i)}
                   className="w-full flex items-center gap-3 p-3 hover:bg-white/5 transition-colors text-left fade-in-up"
                   style={{ animationDelay: `${Math.min(i, 12) * 15}ms` }}
                 >

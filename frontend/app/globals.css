@@ -4,26 +4,23 @@
 
 :root {
   color-scheme: dark;
-  --grid-color: hsl(322 75% 60% / 0.05);
 }
 
 html,
 body {
-  background-color: hsl(240 10% 3.9%);
-  color: hsl(0 0% 98%);
+  background-color: #0b0b0e;
+  color: #f4f4f5;
   min-height: 100vh;
-}
-
-body {
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, hsl(322 75% 60% / 0.12), transparent 60%),
-    radial-gradient(ellipse 60% 50% at 100% 50%, hsl(199 89% 48% / 0.07), transparent 60%),
-    radial-gradient(ellipse 60% 50% at 0% 80%, hsl(280 75% 50% / 0.06), transparent 60%);
-  background-attachment: fixed;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Focus ring is always visible (plan §9) — never remove it without a replacement */
+:focus-visible {
+  outline: 2px solid #e8c547;
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {
@@ -34,45 +31,42 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(240 4% 20%);
+  background: #2e2e37;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(240 4% 32%);
+  background: #3d3d48;
 }
 
 @layer components {
-  .glass {
-    @apply bg-card/60 backdrop-blur-xl border border-white/5;
-  }
+  .glass,
   .glass-strong {
-    @apply bg-card/80 backdrop-blur-2xl border border-white/10;
+    @apply bg-card border border-border;
   }
-  .gradient-border {
-    position: relative;
-    background: hsl(240 10% 5%);
+  .hairline {
+    @apply border-border;
   }
-  .gradient-border::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    padding: 1px;
-    border-radius: inherit;
-    background: linear-gradient(135deg, hsl(322 75% 60% / 0.5), hsl(199 89% 48% / 0.5));
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
+  /* status pill helpers — only place we use color */
+  .status-success {
+    @apply text-success bg-success/10 border border-success/30;
   }
-  .gradient-text {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, hsl(322 75% 70%) 0%, hsl(199 89% 60%) 100%);
+  .status-warning {
+    @apply text-warning bg-warning/10 border border-warning/30;
   }
-  .glow-primary {
-    box-shadow: 0 0 24px hsl(322 75% 60% / 0.25);
+  .status-error {
+    @apply text-destructive bg-destructive/10 border border-destructive/30;
   }
-  .glow-accent {
-    box-shadow: 0 0 24px hsl(199 89% 48% / 0.25);
+  .status-info {
+    @apply text-info bg-info/10 border border-info/30;
+  }
+  .status-muted {
+    @apply text-muted-foreground bg-muted border border-border;
+  }
+  .link-yellow {
+    @apply text-primary hover:text-primary/80 transition-colors;
+  }
+  .font-display-tight {
+    @apply font-display font-semibold tracking-[-0.02em];
   }
 }
 
@@ -81,22 +75,9 @@ body {
   100% { background-position: 200% 0; }
 }
 .shimmer {
-  background: linear-gradient(
-    90deg,
-    hsl(240 5% 11%) 0%,
-    hsl(240 5% 18%) 50%,
-    hsl(240 5% 11%) 100%
-  );
+  background: linear-gradient(90deg, #1a1a20 0%, #23232b 50%, #1a1a20 100%);
   background-size: 200% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
-}
-
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 0 0 hsl(322 75% 60% / 0.4); }
-  50% { box-shadow: 0 0 0 8px hsl(322 75% 60% / 0); }
-}
-.pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
 }
 
 @keyframes fade-in-up {
@@ -107,10 +88,14 @@ body {
   animation: fade-in-up 0.4s ease-out backwards;
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
-}
-.float {
-  animation: float 3s ease-in-out infinite;
+/* Plan §9: respect reduced motion — keep state changes, drop motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

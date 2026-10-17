@@ -5,6 +5,7 @@ from app.models.media import Media
 from app.models.rate_limit_event import RateLimitEvent
 from app.models.setting import Setting
 from app.models.twitter_cookie import TwitterCookie, TwitterCookieSlot
+from app.models.tiktok_cookie import TikTokCookie, TikTokCookieSlot
 
 __all__ = [
     "Account",
@@ -19,6 +20,8 @@ __all__ = [
     "RateLimitEvent",
     "Setting",
     "SourceType",
+    "TikTokCookie",
+    "TikTokCookieSlot",
     "TwitterCookie",
     "TwitterCookieSlot",
 ]

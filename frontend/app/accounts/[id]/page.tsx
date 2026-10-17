@@ -5,8 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Account } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
 import { formatBytes, formatNumber } from "@/lib/utils";
-import { ArrowLeft, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, RefreshCw, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AccountDetailPage() {
@@ -36,29 +37,34 @@ export default function AccountDetailPage() {
     },
   });
 
-  if (!account) return <div>Loading...</div>;
+  if (!account) {
+    return (
+      <div className="flex items-center gap-2 p-12 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Đang tải account…
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/accounts")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h2 className="text-2xl font-bold">@{account.username}</h2>
-            <p className="text-sm text-muted-foreground">{account.destination_folder}</p>
+      <PageHeader
+        title={`@${account.username}`}
+        description={account.destination_folder}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => router.push("/accounts")} className="gap-1.5">
+              <ArrowLeft className="h-3.5 w-3.5" /> Quay lại
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => rescan.mutate()} disabled={rescan.isPending} className="gap-1.5">
+              {rescan.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Rescan
+            </Button>
+            <Button variant="destructive" size="sm" onClick={() => remove.mutate()} className="gap-1.5">
+              <Trash2 className="h-3.5 w-3.5" /> Xoá
+            </Button>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => rescan.mutate()} disabled={rescan.isPending}>
-            <RefreshCw className="h-4 w-4" /> Rescan
-          </Button>
-          <Button variant="destructive" onClick={() => remove.mutate()}>
-            <Trash2 className="h-4 w-4" /> Delete record
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
