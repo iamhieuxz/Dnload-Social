@@ -51,3 +51,16 @@ _t.log
 _t.err
 _f.log
 _f.err
+
+# One-off diagnostic scripts from debug sessions. Keep them out of git;
+# a real check belongs in backend/tests/ and is named test_*.py.
+diag_*.ps1
+diag_*.py
+diag_*.json
+backend/_*.py
+backend/_*.ps1
+_*_backend.out
+_*_backend.err
+_*_frontend.out
+_*_frontend.err
+backend/data/*.db

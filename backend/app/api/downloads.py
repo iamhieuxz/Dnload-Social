@@ -6,7 +6,7 @@ from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -352,11 +352,23 @@ async def run_pending(
     await db.flush()  # get job.id
 
     # Attach rows inside the same transaction as job creation.
-    items: list[dict] = []
-    for d in rows:
-        d.status = DownloadStatus.DOWNLOADING
-        d.job_id = job.id
-        items.append({"id": d.id, "url": d.url, "author": d.author, "title": d.title})
+    #
+    # The claim MUST stay atomic (BEGIN IMMEDIATE / advisory lock) — two
+    # concurrent run-pending calls would otherwise both see the same
+    # PENDING rows and create two jobs for one queue. What we can shrink is
+    # the lock hold time: this used to issue one UPDATE per row, so a 5k-row
+    # queue held SQLite's single write lock across 5k round trips. One
+    # bulk UPDATE touches the same rows in one statement.
+    ids = [d.id for d in rows]
+    await db.execute(
+        update(Download)
+        .where(Download.id.in_(ids))
+        .values(status=DownloadStatus.DOWNLOADING, job_id=job.id)
+    )
+    items: list[dict] = [
+        {"id": d.id, "url": d.url, "author": d.author, "title": d.title}
+        for d in rows
+    ]
 
     await db.commit()
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type GalleryNode, type GalleryFileInfo, type GallerySearchItem, type GalleryStats, type GalleryKind } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,7 @@ import {
   ArrowDownAZ, ArrowDownZA, Clock, ArrowUpDown, ChevronUp,
 } from "lucide-react";
 import { formatBytes, cn } from "@/lib/utils";
+import { sortNodes, type SortDir, type SortKey } from "@/lib/gallery-sort";
 import { toast } from "sonner";
 
 const API = (() => {
@@ -76,8 +78,6 @@ export default function GalleryPage() {
   // Display + sort preferences (persisted in localStorage so the choice
   // survives page reloads).
   type ViewMode = "grid" | "list";
-  type SortKey = "name" | "ctime";
-  type SortDir = "asc" | "desc";
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -262,7 +262,7 @@ export default function GalleryPage() {
                     title="Sort by"
                   >
                     <option value="name">Theo kí tự (Name)</option>
-                    <option value="ctime">Theo thời gian tạo</option>
+                    <option value="ctime">Theo thời gian (folder: file mới nhất)</option>
                   </select>
                   <button
                     onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
@@ -459,26 +459,18 @@ function FolderView({
   qc: ReturnType<typeof useQueryClient>;
   onChanged: () => void;
   viewMode: "grid" | "list";
-  sortKey: "name" | "ctime";
-  sortDir: "asc" | "desc";
+  sortKey: SortKey;
+  sortDir: SortDir;
 }) {
   const children = node.children || [];
   const folders = children.filter((c) => c.is_dir);
   const files = children.filter((c) => !c.is_dir);
 
-  // Sort files by the requested key. We sort folders separately below.
-  const sortedFiles = [...files].sort((a, b) => {
-    let cmp = 0;
-    if (sortKey === "name") cmp = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
-    else if (sortKey === "ctime") cmp = (a.ctime ?? 0) - (b.ctime ?? 0);
-    return sortDir === "asc" ? cmp : -cmp;
-  });
-  const sortedFolders = [...folders].sort((a, b) => {
-    let cmp = 0;
-    if (sortKey === "name") cmp = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
-    else if (sortKey === "ctime") cmp = (a.ctime ?? 0) - (b.ctime ?? 0);
-    return sortDir === "asc" ? cmp : -cmp;
-  });
+  // Folders and files sort independently (folders always render first).
+  // "Time" means mtime for folders so a folder you just downloaded into
+  // floats to the top — see lib/gallery-sort.ts.
+  const sortedFiles = sortNodes<GalleryNode>(files, sortKey, sortDir);
+  const sortedFolders = sortNodes<GalleryNode>(folders, sortKey, sortDir);
 
   return (
     <>
@@ -685,8 +677,8 @@ function FolderCard({
 
 function FileCard({ node, onClick, delay }: { node: GalleryNode; onClick: () => void; delay: number }) {
   const [thumbError, setThumbError] = useState(false);
-  const isImage = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"].includes(node.ext);
-  const isVideo = [".mp4", ".webm", ".mov"].includes(node.ext);
+  const isImage = isImageExt(node.ext ?? "");
+  const isVideo = isVideoExt(node.ext ?? "");
   const showThumb = isImage && !thumbError;
 
   return (
@@ -723,7 +715,8 @@ function FileCard({ node, onClick, delay }: { node: GalleryNode; onClick: () => 
 // Compact row used in the "list" view mode — shows more metadata per file
 // at the cost of horizontal density. Mirrors the layout of SearchResults.
 function FileRow({ node, onClick, delay }: { node: GalleryNode; onClick: () => void; delay: number }) {
-  const Icon = isVideoExt(node.ext) ? Film : isImageExt(node.ext) ? ImageIcon : FileIcon;
+  const ext = node.ext ?? "";
+  const Icon = isVideoExt(ext) ? Film : isImageExt(ext) ? ImageIcon : FileIcon;
   const ts = node.ctime ?? node.mtime;
   return (
     <button
@@ -733,8 +726,8 @@ function FileRow({ node, onClick, delay }: { node: GalleryNode; onClick: () => v
     >
       <div className={cn(
         "h-8 w-8 rounded-md flex items-center justify-center bg-gradient-to-br shrink-0",
-        isImageExt(node.ext) ? "from-primary/30 to-accent/20 text-primary"
-        : isVideoExt(node.ext) ? "from-accent/30 to-primary/20 text-accent"
+        isImageExt(ext) ? "from-primary/30 to-accent/20 text-primary"
+        : isVideoExt(ext) ? "from-accent/30 to-primary/20 text-accent"
         : "from-muted to-muted text-muted-foreground"
       )}>
         <Icon className="h-4 w-4" />
@@ -803,16 +796,11 @@ function SearchResults({
   result: { total: number; items: GallerySearchItem[] } | undefined;
   loading: boolean;
   onSelect: (item: GallerySearchItem, siblings: GallerySearchItem[], index: number) => void | Promise<void>;
-  sortKey: "name" | "ctime";
-  sortDir: "asc" | "desc";
+  sortKey: SortKey;
+  sortDir: SortDir;
   viewMode: "grid" | "list";
 }) {
-  const sorted = (result?.items ?? []).slice().sort((a, b) => {
-    let cmp = 0;
-    if (sortKey === "name") cmp = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
-    else if (sortKey === "ctime") cmp = (a.ctime ?? 0) - (b.ctime ?? 0);
-    return sortDir === "asc" ? cmp : -cmp;
-  });
+  const sorted = sortNodes<GallerySearchItem>(result?.items ?? [], sortKey, sortDir);
   if (loading) {
     return (
       <Card variant="glass" className="p-12 text-center text-muted-foreground flex items-center justify-center gap-2">
@@ -839,7 +827,7 @@ function SearchResults({
             <span></span>
             <span>name · path</span>
             <span className="hidden sm:block text-right">size</span>
-            <span className="text-right">{sortKey === "mtime" ? "created ↓" : "modified"}</span>
+            <span className="text-right">{sortKey === "ctime" ? "created" : "modified"}</span>
           </div>
           <div className="divide-y divide-white/5 max-h-[60vh] overflow-y-auto">
             {sorted.map((it, i) => {
@@ -998,11 +986,13 @@ function FileDrawer({
                 <Button size="sm" variant="outline" onClick={() => setRenaming(true)}>
                   <Edit3 className="h-3.5 w-3.5" /> Rename
                 </Button>
-                <Button size="sm" variant="outline" asChild>
-                  <a href={`${API}/api/gallery/download?path=${encodeURIComponent(file.rel_path)}`} download>
-                    <Download className="h-3.5 w-3.5" /> Download
-                  </a>
-                </Button>
+                <a
+                  href={`${API}/api/gallery/download?path=${encodeURIComponent(file.rel_path)}`}
+                  download
+                  className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                >
+                  <Download className="h-3.5 w-3.5" /> Download
+                </a>
                 <Button size="sm" variant="destructive" onClick={() => setConfirm(true)}>
                   <Trash2 className="h-3.5 w-3.5" /> Delete
                 </Button>

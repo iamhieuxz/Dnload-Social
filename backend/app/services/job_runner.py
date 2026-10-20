@@ -421,66 +421,76 @@ class JobRunner:
             last_event_at = asyncio.get_event_loop().time()
             started_at = last_event_at
             gen = service.download(target, cookie_files=platform_cookies, content_type=d.content_type, author=d.author, run_id=str(d.id))
-            while True:
-                if any(s.is_stopping for s in services.values()):
-                    break
-                elapsed = asyncio.get_event_loop().time() - started_at
-                if elapsed >= TOTAL_DEADLINE:
-                    logger.warning("[ERR] timeout after %ss", int(elapsed))
-                    d.error_message = f"timeout after {int(elapsed)}s (total deadline)"
-                    for s in services.values():
-                        await s.request_stop_async()
-                    break
-                try:
-                    remaining = max(0.1, min(IDLE_TIMEOUT, TOTAL_DEADLINE - elapsed))
-                    ev = await asyncio.wait_for(gen.__anext__(), timeout=remaining)
-                    last_event_at = asyncio.get_event_loop().time()
-                except (StopAsyncIteration, asyncio.TimeoutError) as e:
-                    if isinstance(e, asyncio.TimeoutError):
-                        runner_obj = service.runner
-                        if runner_obj.is_running:
-                            # Subprocess is still alive but silent — keep
-                            # waiting; this is normal during rate-limit
-                            # sleeps and long HTTP calls.
-                            continue
-                        # Process exited but no event surfaced — nothing
-                        # more to do.
-                    break
-                events.append(ev)
-                if ev.get("type") == "user_start":
-                    # Internal event; surfaced as part of the URL line so
-                    # the UI doesn't need to see "starting @user" twice.
-                    pass
-                elif ev.get("type") == "media":
-                    if d.file_path is None:
-                        d.file_path = ev.get("path")
-                        d.file_name = ev.get("filename")
-                    # UI-facing: only the first media event per row is
-                    # worth showing (subsequent ones are parts of the
-                    # same tweet / carousel / Space chunk).
-                    if ev.get("new"):
-                        logger.info("[NEW] %s", ev.get("filename") or os.path.basename(ev.get("path", "")))
-                elif ev.get("type") == "user_done":
-                    pass
-                elif ev.get("type") == "error":
-                    # Trim to a short, user-readable name. Full trace
-                    # stays in the backend log; the user just sees
-                    # "ERR: rate limit exceeded" or similar.
-                    err_name = (ev.get("message") or "unknown").splitlines()[0][:200].rstrip()
-                    logger.warning("[ERR] %s", err_name)
-                    d.error_message = ev.get("message")
-                    break
-                elif ev.get("type") == "warn":
-                    # gallery-dl prints a line per already-on-disk file
-                    # ("# <path>"); surface the count as a single
-                    # [SKIP] so the terminal doesn't drown in skipped
-                    # archive entries.
-                    code = ev.get("code")
-                    if code == "no_output":
-                        logger.info("[ERR] no_output")
-                    else:
-                        # Internal warn — no UI tag → filtered out.
+            try:
+                while True:
+                    if any(s.is_stopping for s in services.values()):
+                        break
+                    elapsed = asyncio.get_event_loop().time() - started_at
+                    if elapsed >= TOTAL_DEADLINE:
+                        logger.warning("[ERR] timeout after %ss", int(elapsed))
+                        d.error_message = f"timeout after {int(elapsed)}s (total deadline)"
+                        for s in services.values():
+                            await s.request_stop_async()
+                        break
+                    try:
+                        remaining = max(0.1, min(IDLE_TIMEOUT, TOTAL_DEADLINE - elapsed))
+                        ev = await asyncio.wait_for(gen.__anext__(), timeout=remaining)
+                        last_event_at = asyncio.get_event_loop().time()
+                    except (StopAsyncIteration, asyncio.TimeoutError) as e:
+                        if isinstance(e, asyncio.TimeoutError):
+                            runner_obj = service.runner
+                            if runner_obj.is_running:
+                                # Subprocess is still alive but silent — keep
+                                # waiting; this is normal during rate-limit
+                                # sleeps and long HTTP calls.
+                                continue
+                            # Process exited but no event surfaced — nothing
+                            # more to do.
+                        break
+                    events.append(ev)
+                    if ev.get("type") == "user_start":
+                        # Internal event; surfaced as part of the URL line so
+                        # the UI doesn't need to see "starting @user" twice.
                         pass
+                    elif ev.get("type") == "media":
+                        if d.file_path is None:
+                            d.file_path = ev.get("path")
+                            d.file_name = ev.get("filename")
+                        # UI-facing: only the first media event per row is
+                        # worth showing (subsequent ones are parts of the
+                        # same tweet / carousel / Space chunk).
+                        if ev.get("new"):
+                            logger.info("[NEW] %s", ev.get("filename") or os.path.basename(ev.get("path", "")))
+                    elif ev.get("type") == "user_done":
+                        pass
+                    elif ev.get("type") == "error":
+                        # Trim to a short, user-readable name. Full trace
+                        # stays in the backend log; the user just sees
+                        # "ERR: rate limit exceeded" or similar.
+                        err_name = (ev.get("message") or "unknown").splitlines()[0][:200].rstrip()
+                        logger.warning("[ERR] %s", err_name)
+                        d.error_message = ev.get("message")
+                        break
+                    elif ev.get("type") == "warn":
+                        # gallery-dl prints a line per already-on-disk file
+                        # ("# <path>"); surface the count as a single
+                        # [SKIP] so the terminal doesn't drown in skipped
+                        # archive entries.
+                        code = ev.get("code")
+                        if code == "no_output":
+                            logger.info("[ERR] no_output")
+                        else:
+                            # Internal warn — no UI tag → filtered out.
+                            pass
+            finally:
+                # Always close the generator so its `finally` runs — that is
+                # what tears down the subprocess and removes the temp cookie
+                # file. Breaking out of the loop (timeout / stop / error)
+                # without this left an orphaned gallery-dl per aborted row.
+                try:
+                    await gen.aclose()
+                except Exception:
+                    logger.exception("Error closing download generator")
 
             # Pick the actual file from disk (gallery-dl/yt-dlp write to disk,
             # we just need to record where the file lives).
@@ -492,20 +502,31 @@ class JobRunner:
             else:
                 # Truncate to 1000 chars so a 50KB stack trace from a
                 # gallery-dl crash doesn't bloat the row.
-                _set_no_output_failure(d, len(events))
+                _set_no_output_failure(d, events)
                 # Skip logging here if the service already surfaced an
                 # [ERR] for this row — the no_output message is just
                 # the same condition reported twice, and we don't want
                 # the terminal to show two lines for one failure.
-                if d.error_message is None:
-                    logger.info("[ERR] %s", (d.error_message or "no output").splitlines()[0][:200])
+                if d.status == DownloadStatus.FAILED:
+                    if d.error_message is None:
+                        logger.info("[ERR] %s", (d.error_message or "no output").splitlines()[0][:200])
+                    await session.flush()
+                    await session.commit()
+                    await ws_manager.broadcast(
+                        "system", "download_update",
+                        {"id": d.id, "status": d.status.value, "error": d.error_message},
+                    )
+                    return False
+
+                # SKIPPED — nothing new to fetch. Counts as a processed
+                # row for job progress, but never as a failure.
                 await session.flush()
                 await session.commit()
                 await ws_manager.broadcast(
                     "system", "download_update",
-                    {"id": d.id, "status": d.status.value, "error": d.error_message},
+                    {"id": d.id, "status": d.status.value},
                 )
-                return False
+                return True
 
             d.status = DownloadStatus.COMPLETED
             d.completed_at = datetime.now(timezone.utc)
@@ -663,16 +684,37 @@ async def _emit_status(job_id: int, status: JobStatus, extra: dict | None = None
     record_event("job_update", {"job_id": job_id, **payload})
 
 
-def _set_no_output_failure(d, event_count: int) -> None:
-    """Mark a Download row as FAILED when no output file was produced
-    by the underlying service. Keeps the prior error_message if any,
-    otherwise writes a generic one, and truncates the result to
-    1000 chars so a 50KB stack trace from a gallery-dl crash doesn't
-    bloat the row (B-20)."""
+def _set_no_output_failure(d, events: list[dict]) -> None:
+    """Classify a Download row that produced no output file.
+
+    "No output" is ambiguous: it can mean the download genuinely failed
+    (bad cookie, network) OR that there was simply nothing left to
+    fetch (profile already archived via --download-archive, empty
+    highlight, private account). Reporting the latter as `failed` made
+    every re-run of an up-to-date profile look like an error in the UI.
+
+    So: if the service surfaced no `error` event and at least one
+    benign "nothing to do" signal (`skip` / `no_output` / `user_done`),
+    the row is SKIPPED. Otherwise it's a real FAILED.
+
+    Keeps any prior error_message, otherwise writes a generic one, and
+    truncates to 1000 chars so a 50KB gallery-dl stack trace doesn't
+    bloat the row (B-20).
+    """
+    benign = not any(ev.get("type") == "error" for ev in events)
+    already_done = any(
+        ev.get("type") == "skip"
+        or (ev.get("type") == "warn" and ev.get("code") == "no_output")
+        for ev in events
+    )
+    if benign and already_done:
+        d.status = DownloadStatus.SKIPPED
+        d.error_message = None
+        return
     if not d.error_message:
         d.error_message = (
             f"No output file found for {d.platform} URL "
-            f"(events={event_count})"
+            f"(events={len(events)})"
         )
     d.error_message = d.error_message[:1000]
     d.status = DownloadStatus.FAILED
