@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 PlatformStr = Literal["instagram", "twitter", "tiktok"]
@@ -33,8 +33,9 @@ class DownloadOut(BaseModel):
     created_at: datetime
     completed_at: datetime | None
 
-    class Config:
-        from_attributes = True
+    # Pydantic v2 name for `from_attributes = True` (class-based Config
+    # is deprecated and removed in v3).
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DownloadListResponse(BaseModel):

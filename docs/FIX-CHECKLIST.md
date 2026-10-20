@@ -66,15 +66,67 @@ Trạng thái: [x] xong · [ ] todo
         frontend (test + type-check + build).
       Verify: ✅ cả 3 command đều pass local trước khi commit
 
-## P2 — trong tháng (chưa làm)
+## P2
 
-- [ ] **B8. `session` giữ mở xuyên suốt job** — `_execute` giữ `session_scope()`
-      trong khi `_process_one` lại `commit()` từng row. Với `asyncpg` một
-      connection bị giữ suốt job (tới 30 phút). Hiện bị `max_concurrent_jobs=1`
-      che giấu; tăng lên 2 là pool exhaustion.
-- [ ] **B9. Tách `frontend/app/page.tsx`** (~1.120 dòng)
-- [ ] **B10. `docker-compose.yml`: bỏ `version:` deprecated**
-- [ ] **B11. Pydantic `class Config` → `ConfigDict`** (`schemas/download.py:15`)
+- [x] **B10. `docker-compose.yml`: bỏ `version:` deprecated**
+      Verify: ✅ `docker compose config --quiet` pass
+
+- [x] **B11. Pydantic `class Config` → `ConfigDict`**
+      `schemas/download.py` — `class Config: from_attributes = True` (deprecated,
+      removed in v3) → `model_config = ConfigDict(from_attributes=True)`.
+      Verify: ✅ 60 passed, **0 warning** (trước có 1 PydanticDeprecatedSince20)
+
+- [x] **B8. ~~`session` giữ mở xuyên suốt job~~ — ĐÃ KIỂM CHỨNG: SAI**
+      Review ban đầu nói "connection bị giữ tới 30 phút". **Sai.**
+      Đo thật với SQLAlchemy async:
+      ```
+      after execute,        checked out: 1
+      after commit,         checked out: 0
+      after 3x execute+commit, checked out: 0
+      ```
+      `commit()` trả connection về pool. `_process_one` commit sau **mỗi** row
+      ⇒ connection được trả về giữa các lần ghi. Không có connection nào bị
+      giữ suốt job, nên `pool_size=5` / `max_conflow=20` không bị ảnh hưởng.
+      **Không sửa gì.** Ghi lại để không ai đôi sửa nhầm vô.
+
+- [ ] **B9. Tách `frontend/app/page.tsx`** (~1.120 dòng chứa Dashboard +
+      form queue + LiveTerminal + stats). Không làm vì nó là refactor thuần
+      hình thức, không sửa được bug nào, và rủi ro regression cao hơn giá trị.
+      Nên làm khi có việc thực tế cần sửa trong file đó.
+
+---
+
+## Xác nhận bằng app thật (chạy backend + frontend, tay vào disk)
+
+### B5 — Gallery sort ✅
+317 folder thật trong `E:\gallery-dl\instagram`:
+
+| folder | ctime (tạo) | mtime (file mới nhất) |
+|---|---|---|
+| `trquynh_luu_` | **07-01 05:44** | **10-14 03:05** |
+| `maichi60.65` | 09-26 03:28 | 10-13 12:35 |
+
+`trquynh_luu_` tạo từ tháng 7 nhưng vừa nhận file 14/10. Sort `ctime` xếp
+nó ngoài top 8; sort `mtime` đưa vào top 6. UI khớp **10/10** với API ở cả
+`asc` lẫn `desc` (đối chiếu tên 10 folder đầu).
+
+### B2 — Download "xong" không còn bị tag lỗi ✅
+Chạy thật 3 job:
+
+| job | input | kết quả | status | error |
+|---|---|---|---|---|
+| 143 | TikTok video mới | tải file mới | `completed` | null |
+| 144 | TikTok video **đã có** | `[SKIP]` | `completed` | null |
+| 145 | IG `lth.na` (3.680 file, đã tải đủ) | `[ERR] no_output` → **`skipped`** | `skipped` | **null** |
+
+Job 145 chính là bug bạn báo: tải xong / không còn gì để tải mà bị gắn lỗi.
+Trước fix nó là `failed` + "No output file found". Giờ `skipped`, và
+`Downloads` page hiển thị *"3 mục trong hàng đợi · đã tải 3"* — không tag
+lỗi đỏ nào.
+
+### B3 — generator leak
+Không tái hiện được bằng tay (cần nhiều timeout liên tiếp). Đã verify bằng
+test đã chứng minh bắt đúng bug — xem mục B3 ở trên.
 
 ---
 

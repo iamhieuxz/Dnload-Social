@@ -1,5 +1,5 @@
-version: "3.9"
-
+# The `version:` key is obsolete — Compose v2 ignores it and warns.
+#
 # PostgreSQL was removed because local-first read patterns (Gallery tree,
 # Stats overview) hit 1-2s latency per request through the docker bridge
 # for what is effectively a single-user DB. SQLite local file is ~10x
