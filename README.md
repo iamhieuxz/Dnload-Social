@@ -19,6 +19,7 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 - [Tính năng](#tính-năng)
 - [Cách hoạt động](#cách-hoạt-động)
 - [Yêu cầu](#yêu-cầu)
+- [❗ Instagram đang tạm hỏng — đang chờ upstream fix](#-instagram-đang-tạm-hỏng--đang-chờ-upstream-fix)
 - [Cài đặt nhanh (SQLite — không cần Docker)](#cài-đặt-nhanh-sqlite--không-cần-docker)
   - [📄 Hướng dẫn mở FE & BE hàng ngày](docs/RUN.md)
 - [Cài đặt với Docker](#cài-đặt-với-docker)
@@ -41,7 +42,7 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 
 | Nền tảng | Engine | Nội dung hỗ trợ |
 |---|---|---|
-| **Instagram** | gallery-dl | Posts · Stories 24h · Highlights · Reels · Single post |
+| **Instagram** ⚠️ | gallery-dl | Posts · Stories 24h · Highlights · Reels · Single post — **tạm hỏng, xem [mục bên dưới](#-instagram-đang-tạm-hỏng--đang-chờ-upstream-fix)** |
 | **Twitter / X** | yt-dlp | Tweet · Video · Space đã kết thúc · Live broadcast đã kết thúc |
 | **TikTok** | gallery-dl | Feed của user · Single video · Short link `vm.tiktok.com` |
 
@@ -113,11 +114,50 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 |---|---|---|
 | **Python** | 3.10+ | Chạy backend |
 | **Node.js** | 18+ | Chạy frontend |
-| **gallery-dl** | 1.30+ | Tự cài qua `pip install -r requirements.txt` |
+| **gallery-dl** | commit `569c0dfe9c` | Ghim cố định, xem [Trạng thái Instagram](#-instagram-đang-tạm-hỏng--đang-chờ-upstream-fix) |
 | **yt-dlp** | bất kỳ | Tự cài qua `pip install -r requirements.txt` |
 | **Dung lượng ổ đĩa | tuỳ video | Video TikTok ~5–50 MB mỗi cái |
 
 > **Docker (không bắt buộc)** — nếu chỉ dùng SQLite thì không cần Docker.
+
+---
+
+## ! Instagram đang tạm hỏng — đang chờ upstream fix
+
+> Cập nhật **2026-10-21**. Twitter/X và TikTok **không ảnh hưởng**.
+
+**Hiện tượng:** mọi profile Instagram trả về `No output file found` dù tài khoản có bài đăng. Stories và link post trực tiếp (`/p/<code>/`) không bị ảnh hưởng.
+
+**Nguyên nhân — không phải lỗi của Dnload Social.** Từ **2026-10-15**, Instagram từ chối các query GraphQL `PolarisProfilePageContentQuery` và `PolarisProfilePostsTabContentQuery`. HTTP trả về `200` nhưng body chứa lỗi:
+
+```json
+{"errors":[{"message":"A server error missing_required_variable_value occured.",
+  "severity":"CRITICAL",
+  "code":1675012,
+  "summary":"Your Request Couldn't be Processed"}]}
+```
+
+gallery-dl đọc `["data"]` → gặp `KeyError` → báo `NotFoundError: Requested user could not be found` → dừng với exit code khác 0, không file nào được tải.
+
+**Không phải do cookie của bạn.** Đã kiểm chứng:
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `sessionid` còn hạn | ✅ còn **153 ngày** |
+| Lỗi tái hiện trên gallery-dl 1.32.16 | ✅ giống hệt |
+| Lỗi tái hiện trên gallery-dl 1.32.17 | ✅ giống hệt |
+| **TikTok, cùng cookie & cùng IP** | ✅ **vẫn tải bình thường** |
+
+**Đang chờ gì:** bản vá nằm ở commit [`569c0dfe9c`](https://codeberg.org/mikf/gallery-dl/commit/569c0dfe9c) của gallery-dl — bổ sung các trường `__relay_internal__pv__Polaris…relayprovider` mà Instagram mới yêu cầu. Hiện **chưa có bản release nào chứa bản vá này**, và `master` HEAD còn lỗi riêng (`404` tại `/web/search/topsearch/`), nên `requirements.txt` ghim đúng commit đó.
+
+Theo dõi tình trạng:
+
+- Issue chính: [mikf/gallery-dl#519](https://codeberg.org/mikf/gallery-dl/issues/519)
+- Issue đã đóng nhưng cùng nguyên nhân: [#9816](https://github.com/mikf/gallery-dl/issues/9816), [#9818](https://github.com/mikf/gallery-dl/issues/9818)
+
+**Khi nào hết lỗi:** khi upstream release bản tag mới chứa bản vá, đổi dòng ghim trong `backend/requirements.txt` từ commit sang số version. Không cần sửa code nào khác.
+
+> ⚠️ **Không tự export cookie lại** — cookie của bạn vẫn còn hạn, việc này không giúp ích.
 
 ---
 
@@ -385,11 +425,24 @@ curl -X POST "http://localhost:8000/api/downloads/run-pending?platform=tiktok"
 ## Khắc phục sự cố
 
 <details>
-<summary><b>Không tải được gì, báo <code>No output file found</code></b></summary>
+<summary><b>Instagram báo <code>No output file found</code> / <code>Requested user could not be found</code></b></summary>
 
-- **Instagram:** thiếu cookie hợp lệ → vào Settings upload lại cookie.
-- **Cookie hết hạn:** thay cookie mới. Cookie Instagram thường hết hạn sau vài tuần.
-- **Bị rate-limit (429):** job tự dừng, nghỉ `rate_limit_limit_cooldown` giây rồi thử lại — hoặc tăng `rate_limit_min_delay`.
+**Đọc [mục Trạng thái Instagram](#-instagram-đang-tạm-hỏng--đang-chờ-upstream-fix) trước.** Đây là lỗi phía Instagram, không phải cookie hết hạn và không phải lỗi cấu hình — sẽ tự hết khi gallery-dl phát hành bản vá.
+
+Để xác nhận nhanh là lỗi này chứ không phải cookie:
+
+```powershell
+cd f:\web-app2\backend
+.\.venv\Scripts\python.exe -m gallery_dl "https://www.instagram.com/<tên-bất-kỳ>/" --no-download -v
+```
+
+Nếu thấy `PolarisProfilePageContentQuery` rồi `missing_required_variable_value` / code `1675012` → đúng lỗi trên.
+</details>
+
+<details>
+<summary><b>Instagram không tải được nhưng cookie vẫn hợp lệ</b></summary>
+
+Xem mục trên. Cookie còn hạn ~150 ngày nhưng Instagram vẫn từ chối query — hai thứ này độc lập nhau.
 </details>
 
 <details>

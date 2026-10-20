@@ -33,7 +33,6 @@ logs/
 # Credentials / cookies — NEVER commit these
 cookies.txt
 *cookie*.txt
-!_empty_cookie.txt
 secrets/**/*.txt
 *.key
 *.pem
@@ -46,11 +45,19 @@ secrets/**/*.txt
 # Build cache
 *.tsbuildinfo
 
+# Agent scratch: local tool config and multi-agent session artifacts.
+# Neither belongs in the repo — both are machine-local working state.
+.agents/
+.cursor/
+
 # Local scratch files from debugging sessions
 _t.log
 _t.err
 _f.log
 _f.err
+_take/
+_diary/
+_explored/
 
 # One-off diagnostic scripts from debug sessions. Keep them out of git;
 # a real check belongs in backend/tests/ and is named test_*.py.
@@ -59,8 +66,11 @@ diag_*.py
 diag_*.json
 backend/_*.py
 backend/_*.ps1
+backend/_*.out
+backend/_*.err
 _*_backend.out
 _*_backend.err
 _*_frontend.out
 _*_frontend.err
 backend/data/*.db
+backend/*.log.err

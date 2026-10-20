@@ -1,3 +1,0 @@
-# Netscape HTTP Cookie File
-# This is an empty cookie file used for pipeline smoke testing only.
-# Real cookies are NOT included.
