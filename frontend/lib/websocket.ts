@@ -61,6 +61,12 @@ export function usePollingSystemEvents(onEvent?: (e: LogEvent) => void) {
                 job_id: ev.job_id,
                 level: ev.level,
                 message: ev.message,
+                // Keep the platform tag and the server timestamp: the UI
+                // colours lines by stream, and the same event also arrives
+                // over the WebSocket — the timestamp is what lets the
+                // consumer drop the duplicate.
+                platform: ev.platform,
+                ts: ev.ts,
               },
             } as LogEvent);
           } else {

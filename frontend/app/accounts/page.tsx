@@ -183,7 +183,7 @@ export default function AccountsPage() {
             <select
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value as typeof sortKey)}
-              className="bg-transparent text-xs focus:outline-none"
+              className="control-type bg-transparent focus:outline-none"
               title="Sort by"
             >
               <option value="username">Username</option>

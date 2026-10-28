@@ -58,7 +58,7 @@ export default function JobsPage() {
               key={s}
               onClick={() => setStatus(s)}
               className={cn(
-                "px-3 py-1.5 rounded-md text-xs font-medium transition-colors border",
+                "tab-type px-3 py-1.5 rounded-md transition-colors border",
                 status === s
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"

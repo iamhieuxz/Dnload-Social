@@ -258,7 +258,7 @@ export default function GalleryPage() {
                   <select
                     value={sortKey}
                     onChange={(e) => setSortKey(e.target.value as SortKey)}
-                    className="bg-transparent text-xs focus:outline-none"
+                    className="control-type bg-transparent focus:outline-none"
                     title="Sort by"
                   >
                     <option value="name">Theo kí tự (Name)</option>

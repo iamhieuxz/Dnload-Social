@@ -61,6 +61,8 @@ Design Decisions:
 - Typography:
     - display:   "Inter Tight" weight 600, letter-spacing -0.02em
     - body:      "Inter" 14px / 1.55, weight 400-500
+    - tabs:      "Inter Tight" 600 · 13px · tracking -0.01em (weight cố định, không đổi khi active)
+    - controls:  "Inter Tight" 500 · 13px cho select/filter (một bậc dưới tab)
     - mono:      "JetBrains Mono" 12-13px cho path, URL, log, shortcut chip
     - KHÔNG dùng Inter weight 400 cho heading
 - Spacing: 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64
@@ -81,11 +83,12 @@ Design Decisions:
 
 ## 5. Branding
 
-App tên "Dnload Social" — giữ tên, polish logo. Logo concept:
-- Khối vuông 32x32 bo góc 8, fill `accent` (`#E8C547`)
-- Bên trong: 2 mũi tên xuống song song (icon Download) màu `ground` — stroke 2.5
-- Header dùng chữ "Dnload" Inter Tight 600, "Social" ở weight 400
-- Subtitle: bỏ "v7.0.0" — thay bằng tagline ngắn "Local · Multi-platform"
+App tên "Dnload Social" — giữ tên, logo đã chốt:
+- Mark: chữ **D** đặc trên tile vàng 40×40 bo 9.6 (24%); counter âm bản thành mũi tên tải xuống, tâm D trùng tâm tile. Glyph màu `ground`.
+- Wordmark: "Dnload" Inter Tight 600 + "Social" 400, tracking −0.02em; lockup stacked kèm tagline mono "LOCAL-FIRST MEDIA ARCHIVE".
+- Assets: `frontend/public/brand/` (mark, mark-inverse, mark-glyph, lockup dark/light, lockup-stacked, favicon.svg, PNG 512/192, apple-touch-icon). Favicon `public/favicon.ico` dùng 16px arrow-only + 32/48 full mark; `favicon.svg` arrow-only cho browser hiện đại; apple icon full-bleed vàng 180px. Link icon được version `?v=2` để phá cache favicon của Chrome.
+- Áp dụng: sidebar 32px, mobile header 28px, loading 44px + sweep bar, browser tab / OS icon.
+- Header dùng chữ "Dnload" Inter Tight 600, "Social" ở weight 400; subtitle "Local · Multi-platform".
 
 ## 6. IA & Page-by-page plan
 

@@ -2,29 +2,31 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type DownloadPlatform, type DownloadSource, type DownloadStats, type Job } from "@/lib/api";
+import { api, type DownloadPlatform, type DownloadSource, type Job } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { StatCards } from "@/components/StatCards";
 import { PageHeader } from "@/components/PageHeader";
 import { PlatformDot } from "@/components/PlatformDot";
 import { ShortcutChip } from "@/components/ShortcutChip";
+import { StatusDeck } from "@/components/StatusDeck";
+import { ControlRail } from "@/components/ControlRail";
+import { TopAccounts } from "@/components/TopAccounts";
 import { useSystemWebSocket, type LogEvent } from "@/lib/websocket";
 import {
   Instagram, Twitter, Link2, ListTree, Database, Loader2,
-  Sparkles, Plus, CheckCircle2, XCircle, Clock, Download as DownloadIcon,
-  TrendingUp, Terminal, Trash2, Pause, Play, Square, Music2,
+  Plus, CheckCircle2, Download as DownloadIcon,
+  Terminal, Trash2, Pause, Play, Square, Music2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn, formatBytes, formatDuration } from "@/lib/utils";
+import { cn, formatBytes, formatDuration, formatNumber } from "@/lib/utils";
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title="Dashboard"
-        description="Theo dõi và xếp hàng tải từ Instagram, X và TikTok"
+        description="Instagram và X tải song song, nhịp độ tự giãn theo tín hiệu rate limit"
         actions={
           <button
             type="button"
@@ -35,13 +37,17 @@ export default function DashboardPage() {
           </button>
         }
       />
-      <StatCards />
-      <DownloadConsole />
-      <ActiveJobIndicator />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <DownloadQueueSummary />
-        <LiveTerminal />
+      <StatusDeck />
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <div className="lg:col-span-7 xl:col-span-8">
+          <DownloadConsole />
+        </div>
+        <aside className="space-y-5 lg:col-span-5 xl:col-span-4">
+          <ControlRail />
+          <TopAccounts />
+        </aside>
       </div>
+      <LiveTerminal />
     </div>
   );
 }
@@ -273,7 +279,7 @@ function DownloadConsole() {
                   aria-checked={active}
                   onClick={() => setPlatform(p.value)}
                   className={cn(
-                    "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors",
+                    "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 tab-type transition-colors",
                     active
                       ? "border-accent bg-accent-soft text-ink"
                       : "border-border text-ink-2 hover:bg-surface-2 hover:text-ink"
@@ -297,7 +303,7 @@ function DownloadConsole() {
                   aria-checked={active}
                   onClick={() => setSource(s.value)}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 tab-type transition-colors",
                     active
                       ? "border-accent bg-accent-soft text-ink"
                       : "border-border text-ink-2 hover:bg-surface-2 hover:text-ink"
@@ -354,8 +360,8 @@ function DownloadConsole() {
                 );
               })}
             </div>
-            <div className="text-[10px] text-muted-foreground mt-1.5">
-              Tip: split into separate runs to avoid IG rate-limits
+            <div className="mt-1.5 text-[10px] text-muted-foreground">
+              Nhịp giữa các account do app tự giãn (18–45s, cooldown khi bị throttle) — không cần chia nhỏ run.
             </div>
             {layerHighlights && (
               <div className="mt-3 rounded-lg border border-border bg-card p-3 space-y-2">
@@ -369,6 +375,9 @@ function DownloadConsole() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <Input
+                    id="ig-username"
+                    name="ig-username"
+                    aria-label="Tên tài khoản Instagram"
                     placeholder="username (e.g. hienthuc.27)"
                     value={(() => {
                       const m = text.match(/instagram\.com\/([\w.]+)/);
@@ -419,6 +428,9 @@ function DownloadConsole() {
         {source === "link" && (
           <div>
             <Input
+              id="download-url"
+              name="download-url"
+              aria-label="URL cần tải"
               placeholder={PLACEHOLDER_LINK[platform]}
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -498,437 +510,142 @@ function DownloadConsole() {
   );
 }
 
-// =========================================================================
-// Active job indicator — Stop button + Resume/Run-pending call-to-action
-// =========================================================================
-
-interface PendingSummary {
-  platform: string;
-  pending: number;
-  in_flight: number;
-  resumable: number;
-}
-
-function ActiveJobIndicator() {
-  const qc = useQueryClient();
-  const { data: activeData } = useQuery<{ job: Job | null }>({
-    queryKey: ["active-job"],
-    queryFn: async () => (await api.get("/api/jobs/active")).data,
-    refetchInterval: 3_000,
-  });
-  const job = activeData?.job ?? null;
-  const [elapsed, setElapsed] = useState(0);
-
-  // Per-platform pending summary — used to render "Resume pending (N)" chips
-  const summaries = useQuery<Record<string, PendingSummary>>({
-    queryKey: ["pending-summary-all"],
-    queryFn: async () => {
-      const [ig, tw, tt] = await Promise.all(
-        (["instagram", "twitter", "tiktok"] as const).map((p) =>
-          api.get("/api/downloads/pending-summary", { params: { platform: p } })
-        )
-      );
-      return { instagram: ig.data, twitter: tw.data, tiktok: tt.data };
-    },
-    refetchInterval: 5_000,
-  });
-
-  useEffect(() => {
-    if (!job?.started_at) {
-      setElapsed(0);
-      return;
-    }
-    const t = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - new Date(job.started_at!).getTime()) / 1000));
-    }, 1000);
-    return () => clearInterval(t);
-  }, [job?.started_at]);
-
-  const stopMut = useMutation({
-    mutationFn: async (jobId: number) => (await api.post(`/api/jobs/${jobId}/stop`)).data,
-    onSuccess: () => {
-      toast.success("Stop signal sent — current download will finish or be torn down");
-      qc.invalidateQueries({ queryKey: ["active-job"] });
-      qc.invalidateQueries({ queryKey: ["downloads"] });
-      qc.invalidateQueries({ queryKey: ["downloads-stats"] });
-      qc.invalidateQueries({ queryKey: ["pending-summary-all"] });
-    },
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Failed to stop"),
-  });
-
-  const runMut = useMutation({
-    mutationFn: async (plat: DownloadPlatform) =>
-      (await api.post("/api/downloads/run-pending", null, { params: { platform: plat } })).data,
-    onSuccess: (res) => {
-      if (res.marked === 0) {
-        toast.info(`No pending ${res.job_id ? "" : ""}downloads for ${res.platform ?? "this platform"}`);
-      } else {
-        toast.success(`Resumed ${res.marked} pending download${res.marked === 1 ? "" : "s"}`);
-      }
-      qc.invalidateQueries({ queryKey: ["downloads"] });
-      qc.invalidateQueries({ queryKey: ["active-job"] });
-      qc.invalidateQueries({ queryKey: ["pending-summary-all"] });
-    },
-    onError: (e: any) => toast.error(e?.response?.data?.detail ?? "Failed to resume"),
-  });
-
-  const ig = summaries.data?.instagram;
-  const tw = summaries.data?.twitter;
-  const tt = summaries.data?.tiktok;
-  const totalResumable = (ig?.resumable ?? 0) + (tw?.resumable ?? 0) + (tt?.resumable ?? 0);
-  let targets: string[] = [];
-  try { targets = job?.targets ? JSON.parse(job.targets) : []; } catch { targets = []; }
-
-  return (
-    <Card className="overflow-hidden">
-      <CardContent className="flex flex-wrap items-center gap-3 p-3">
-        <div className="mr-auto flex min-w-48 items-center gap-2">
-          <span className={cn("h-2 w-2 shrink-0 rounded-full", job ? "animate-pulse bg-info" : "bg-muted-foreground")} />
-          <div className="min-w-0">
-            {job ? (
-              <div className="text-xs font-medium">
-                Job <span className="font-mono text-accent">#{job.id}</span>
-                <span className="ml-2 font-mono text-muted-foreground">{formatDuration(elapsed)} · {job.new_files_count} files</span>
-              </div>
-            ) : (
-              <div className="text-xs text-muted-foreground">
-                {totalResumable ? `${totalResumable} mục sẵn sàng tiếp tục` : "Không có job đang chạy"}
-              </div>
-            )}
-          </div>
-          {job && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => stopMut.mutate(job.id)}
-              disabled={stopMut.isPending}
-              className="h-7 gap-1.5 px-2 text-xs"
-            >
-              {stopMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Square className="h-3 w-3" />}
-              Stop
-            </Button>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <ResumeAction platform="instagram" label="IG" summary={ig} running={targets.some((target) => target.includes("instagram.com"))} pending={runMut.isPending && runMut.variables === "instagram"} onClick={() => runMut.mutate("instagram")} />
-          <ResumeAction platform="twitter" label="X" summary={tw} running={targets.some((target) => target.includes("x.com") || target.includes("twitter.com"))} pending={runMut.isPending && runMut.variables === "twitter"} onClick={() => runMut.mutate("twitter")} />
-          <ResumeAction platform="tiktok" label="TikTok" summary={tt} running={targets.some((target) => target.includes("tiktok.com"))} pending={runMut.isPending && runMut.variables === "tiktok"} onClick={() => runMut.mutate("tiktok")} />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ResumeAction({ platform, label, summary, running, pending, onClick }: {
-  platform: DownloadPlatform;
-  label: string;
-  summary: PendingSummary | undefined;
-  running: boolean;
-  pending: boolean;
-  onClick: () => void;
-}) {
-  const count = summary?.resumable ?? 0;
-  return (
-    <Button
-      size="sm"
-      variant={count ? "default" : "outline"}
-      disabled={running || pending || count === 0}
-      onClick={onClick}
-      className="h-7 gap-1.5 px-2 text-xs"
-      aria-label={`Tiếp tục ${label}: ${count} mục`}
-    >
-      {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-      {label}<span className="font-mono opacity-70">{count}</span>
-    </Button>
-  );
-}
-
-function ResumeRow({
-  platform, label, icon: Icon, summary, running, isPending, onResume,
-}: {
-  platform: DownloadPlatform;
-  label: string;
-  icon: typeof Instagram;
-  summary: PendingSummary | undefined;
-  running: boolean;
-  isPending: boolean;
-  onResume: () => void;
-}) {
-  const resumable = summary?.resumable ?? 0;
-  const disabled = running || resumable === 0 || isPending;
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-2.5">
-      <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium flex items-center gap-2">
-          {label}
-          {running && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono uppercase tracking-wider status-success flex items-center gap-1">
-              <Loader2 className="h-2.5 w-2.5 animate-spin" /> running
-            </span>
-          )}
-        </div>
-        <div className="text-[11px] text-muted-foreground font-mono flex items-center gap-2 flex-wrap">
-          <span><span className="text-warning">{summary?.pending ?? 0}</span> pending</span>
-          <span className="text-muted-foreground/50">·</span>
-          <span>{summary?.in_flight ?? 0} in_flight</span>
-          <span className="text-muted-foreground/50">·</span>
-          <span className="text-foreground font-semibold">{resumable} resumable</span>
-        </div>
-      </div>
-      <Button
-        size="sm"
-        variant={resumable > 0 ? "default" : "outline"}
-        onClick={onResume}
-        disabled={disabled}
-        className={cn(
-          "gap-1.5 min-w-[110px]",
-          resumable > 0 && !running && "bg-primary text-primary-foreground hover:bg-primary/90"
-        )}
-      >
-        {isPending ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Play className="h-3.5 w-3.5" />
-        )}
-        {running ? "Đang chạy" : resumable === 0 ? "Hết hàng" : `Resume (${resumable})`}
-      </Button>
-    </div>
-  );
-}
 
 // =========================================================================
-// Queue summary
-// =========================================================================
-function DownloadQueueSummary() {
-  const { data: stats } = useQuery<DownloadStats>({
-    queryKey: ["downloads-stats"],
-    queryFn: async () => (await api.get("/api/downloads/stats")).data,
-    refetchInterval: 5_000,
-  });
-
-  if (!stats) return null;
-
-  const platEntries: [DownloadPlatform, number][] = (Object.keys(PLATFORM_LABELS) as DownloadPlatform[])
-    .map((platform) => [platform, stats.by_platform[platform] ?? 0]);
-  const statusEntries = Object.entries(stats.by_status);
-
-  return (
-    <div className="flex h-full flex-col gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" /> Queue theo nền tảng
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {platEntries.map(([p, n]) => (
-                <PlatformBar
-                  key={p}
-                  platform={p as DownloadPlatform}
-                  count={n}
-                  max={Math.max(...platEntries.map(([_, v]) => v), 1)}
-                />
-              ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Clock className="h-4 w-4" /> Trạng thái hàng đợi
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {statusEntries.length === 0
-              ? <div className="col-span-full text-xs text-muted-foreground">Chưa có download</div>
-              : statusEntries.map(([s, n]) => <StatusPill key={s} status={s} count={n} />)}
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-3 border-t border-border pt-3 text-center">
-            <div><div className="text-lg font-semibold">{stats.last_24h}</div><div className="text-[10px] text-muted-foreground">24 giờ</div></div>
-            <div><div className="text-lg font-semibold">{stats.last_7d}</div><div className="text-[10px] text-muted-foreground">7 ngày</div></div>
-            <div><div className="text-lg font-semibold">{formatBytes(stats.total_size_bytes)}</div><div className="text-[10px] text-muted-foreground">Dung lượng</div></div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function PlatformBar({ platform, count, max }: { platform: DownloadPlatform; count: number; max: number }) {
-  const cfg = PLATFORMS.find((p) => p.value === platform)!;
-  const pct = Math.round((count / max) * 100);
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-2">
-          <PlatformDot platform={platform} />
-          <span className="text-sm font-medium">{cfg.label}</span>
-        </div>
-        <span className="text-xs font-mono text-muted-foreground">{count}</span>
-      </div>
-      <div className="h-2 rounded-full bg-muted overflow-hidden">
-        <div
-          className="h-full bg-primary transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-const PLATFORM_LABELS: Record<DownloadPlatform, string> = {
-  instagram: "Instagram",
-  twitter: "Twitter / X",
-  tiktok: "TikTok",
-};
-
-// Status colors: success / error / info carry brand color; pending & skipped
-// are neutral so only meaningful state stands out.
-const STATUS_META: Record<string, { icon: typeof Clock; cls: string; label: string }> = {
-  pending:     { icon: Clock,      cls: "border border-border bg-card text-foreground",       label: "Pending" },
-  downloading: { icon: Loader2,    cls: "status-info",                                         label: "Downloading" },
-  completed:   { icon: CheckCircle2, cls: "status-success",                                    label: "Completed" },
-  failed:      { icon: XCircle,    cls: "status-error",                                        label: "Failed" },
-  skipped:     { icon: XCircle,    cls: "status-muted",                                        label: "Skipped" },
-};
-
-function StatusPill({ status, count }: { status: string; count: number }) {
-  const meta = STATUS_META[status] || { icon: Clock, cls: "status-muted", label: status };
-  const Icon = meta.icon;
-  return (
-    <div className={cn("flex items-center gap-2 rounded-lg px-3 py-2", meta.cls)}>
-      <Icon className={cn("h-4 w-4", status === "downloading" && "animate-spin")} />
-      <div>
-        <div className="text-sm font-bold">{count}</div>
-        <div className="text-[10px] opacity-80">{meta.label}</div>
-      </div>
-    </div>
-  );
-}
-
-// =========================================================================
-// Live terminal — real-time log panel for whatever the runner is doing
+// Live terminal — one stream, colour-coded by platform
 // =========================================================================
 
 const MAX_LINES = 500;
 
-function classifyLogLine(line: string): { tone: "info" | "success" | "warn" | "error" | "muted"; tag?: { kind: string; cls: string; label: string } } {
-  const l = line.toLowerCase();
-  if (!line.trim()) return { tone: "muted" };
-  // Detect platform + content_type tag from "Download #N [platform/ct]" lines.
-  // Backend prefixes user_start/user_done with "→ @user" / "done @user".
-  const tagMatch = line.match(/\[(\w+)\/(\w+)]/);
-  let tag: { kind: string; cls: string; label: string } | undefined;
-  if (tagMatch) {
-    const [, plat, ct] = tagMatch;
-    const k = `${plat}/${ct}`;
-    tag = { kind: k, cls: TAG_CLS[k] ?? "border border-border bg-muted text-foreground", label: k };
-  }
-  if (l.includes("[error]") || l.includes("error:") || l.includes("exception") || l.includes("failed") || l.includes("exit code")) {
-    return { tone: "error", tag };
-  }
-  if (l.includes("warn") || l.includes("rate limit") || l.includes("429") || l.includes("rate-limit")) {
-    return { tone: "warn", tag };
-  }
-  if (l.includes("done ") || l.includes("completed") || l.includes("media:") || l.includes("new=") || l.includes("user_done")) {
-    return { tone: "success", tag };
-  }
-  if (l.startsWith("-->") || l.startsWith("done") || l.includes("downloading") || l.includes("launching")) {
-    return { tone: "info", tag };
-  }
-  return { tone: "muted", tag };
+type TermLine = {
+  ts: number;
+  text: string;
+  /** Which download stream produced the line; set by the backend's log
+   *  handler from the job's platform, so it never has to be guessed from
+   *  the filename (Instagram and X both write plain "[NEW] <file>" lines). */
+  platform?: string;
+};
+
+const PLATFORM_UI: Record<
+  string,
+  { short: string; label: string; chip: string; dot: string }
+> = {
+  instagram: {
+    short: "IG",
+    label: "Instagram",
+    chip: "border-plat-ig/30 bg-plat-ig/10 text-plat-ig",
+    dot: "bg-plat-ig",
+  },
+  twitter: {
+    short: "X",
+    label: "X / Twitter",
+    chip: "border-plat-x/30 bg-plat-x/10 text-plat-x",
+    dot: "bg-plat-x",
+  },
+  tiktok: {
+    short: "TT",
+    label: "TikTok",
+    chip: "border-plat-tiktok/30 bg-plat-tiktok/10 text-plat-tiktok",
+    dot: "bg-plat-tiktok",
+  },
+};
+
+/** Tone comes from the backend's tag prefix — no guessing at message bodies. */
+function levelOf(text: string): "info" | "success" | "warn" | "error" | "muted" {
+  if (text.startsWith("[ERR]")) return "error";
+  if (text.startsWith("[RATE]")) return "warn";
+  if (text.startsWith("[OK]")) return "success";
+  if (text.startsWith("[SKIP]")) return "muted";
+  if (text.startsWith("JOB ")) return "success";
+  if (text.startsWith("[NEW]")) return "info";
+  return "muted";
 }
 
-// Per-tag pill colors. Now using only neutral surfaces — borders + lowercase
-// background tint for visual grouping. Status colors stay for error/warn.
-const TAG_CLS: Record<string, string> = {
-  "instagram/post":      "border border-border bg-muted text-foreground",
-  "instagram/story":     "border border-border bg-muted text-foreground",
-  "instagram/highlight": "border border-border bg-muted text-foreground",
-  "twitter/tweet":       "border border-border bg-muted text-foreground",
-  "twitter/live":        "border border-border bg-muted text-foreground",
-  "tiktok/tiktok":       "border border-border bg-muted text-foreground",
+const TONE_TEXT: Record<string, string> = {
+  info: "text-ink-2",
+  success: "text-success",
+  warn: "text-warning",
+  error: "text-destructive",
+  muted: "text-ink-3",
 };
 
-// Tone palette: only success/warn/error carry color; info/muted are neutral.
-const TONE_CLS: Record<string, { text: string; gutter: string; prefix: string }> = {
-  info:    { text: "text-foreground/80", gutter: "text-muted-foreground/40", prefix: "›" },
-  success: { text: "text-success",       gutter: "text-success/40",          prefix: "✓" },
-  warn:    { text: "text-warning",       gutter: "text-warning/40",          prefix: "!" },
-  error:   { text: "text-destructive",  gutter: "text-destructive/40",      prefix: "×" },
-  muted:   { text: "text-muted-foreground", gutter: "text-muted-foreground/30", prefix: "·" },
-};
+type LevelFilter = "all" | "error" | "warn";
 
 function LiveTerminal() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const linesRef = useRef<{ ts: number; text: string }[]>([]);
+  const linesRef = useRef<TermLine[]>([]);
+  // The same event reaches us twice: once over the WebSocket and once from
+  // the polling fallback that always runs alongside it. Server timestamps
+  // are identical on both copies, so they are the dedupe key.
+  const seenRef = useRef<Set<string>>(new Set());
   const [lineCount, setLineCount] = useState(0);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [filter, setFilter] = useState<"all" | "info" | "success" | "warn" | "error" | "post" | "story" | "highlight" | "tweet" | "tiktok">("all");
-  const [elapsed, setElapsed] = useState(0);
+  const [level, setLevel] = useState<LevelFilter>("all");
+  const [platformFilter, setPlatformFilter] = useState<string>("all");
   const qc = useQueryClient();
+  // Data-driven chrome is gated on mount so the first client render matches
+  // the server-rendered HTML (the queries below resolve before hydration
+  // finishes on a slow first paint).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  // Which job are we currently following? Auto-detect the active one.
-  const { data: activeData } = useQuery<{ job: Job | null }>({
-    queryKey: ["active-job"],
-    queryFn: async () => (await api.get("/api/jobs/active")).data,
+  // Same cache entry as ControlRail — one request for both panels.
+  const { data: jobsData } = useQuery<{ items: Job[] }>({
+    queryKey: ["jobs", "running"],
+    queryFn: async () =>
+      (await api.get("/api/jobs", { params: { status: "running", page_size: 10 } })).data,
     refetchInterval: 3_000,
   });
-  const job = activeData?.job ?? null;
+  const running = mounted ? jobsData?.items ?? [] : [];
 
-  // Tick the elapsed-time clock every second while a job is running.
-  useEffect(() => {
-    if (!job?.started_at) {
-      setElapsed(0);
-      return;
-    }
-    const t = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - new Date(job.started_at!).getTime()) / 1000));
-    }, 1000);
-    return () => clearInterval(t);
-  }, [job?.started_at]);
-
-  // WebSocket — follow the active job if any, else listen to /ws/system for
-  // download_update / job_update notifications (so the panel still shows
-  // "no active job" lines when the runner is idle).
   const { connected, resetCursor } = useSystemWebSocket((event: LogEvent) => {
     if (event.type === "log") {
       const text: string = event.data?.message ?? "";
       if (!text) return;
-      linesRef.current.push({ ts: Date.now(), text });
-      if (linesRef.current.length > MAX_LINES) {
-        linesRef.current = linesRef.current.slice(-MAX_LINES);
-      }
-      setLineCount(linesRef.current.length);
-      scrollToBottom();
+      const serverTs: number | null =
+        typeof event.data?.ts === "number" ? event.data.ts : null;
+      push(
+        {
+          ts: serverTs ? serverTs * 1000 : Date.now(),
+          text,
+          platform: event.data?.platform ?? undefined,
+        },
+        serverTs ? `${serverTs}|${text}` : undefined
+      );
     } else if (event.type === "job_update" || event.type === "status") {
-      // refresh active job so the header pill updates
-      qc.invalidateQueries({ queryKey: ["active-job"] });
-      // also reflect job-level events into the log so the user sees them
+      qc.invalidateQueries({ queryKey: ["jobs"] });
       const id = event.data?.job_id;
       const status = event.data?.status;
-      const new_files = event.data?.new_files;
-      const processed = event.data?.processed;
-      const platform = event.data?.platform;
       if (id && status) {
-        const note = new_files != null
-          ? `JOB #${id} ${status} · platform=${platform ?? "?"} · new_files=${new_files} · processed=${processed ?? 0}`
-          : `JOB #${id} ${status}`;
-        linesRef.current.push({ ts: Date.now(), text: note });
-        if (linesRef.current.length > MAX_LINES) {
-          linesRef.current = linesRef.current.slice(-MAX_LINES);
-        }
-        setLineCount(linesRef.current.length);
-        scrollToBottom();
+        const platform = event.data?.platform;
+        const newFiles = event.data?.new_files;
+        push({
+          ts: Date.now(),
+          platform: platform ?? undefined,
+          text:
+            newFiles != null
+              ? `JOB #${id} ${String(status).toUpperCase()} · ${newFiles} file · ${event.data?.processed ?? 0} account`
+              : `JOB #${id} ${String(status).toUpperCase()}`,
+        });
       }
     }
   });
+
+  function push(line: TermLine, dedupeKey?: string) {
+    if (dedupeKey) {
+      if (seenRef.current.has(dedupeKey)) return;
+      seenRef.current.add(dedupeKey);
+      if (seenRef.current.size > 2000) seenRef.current.clear();
+    }
+    linesRef.current.push(line);
+    if (linesRef.current.length > MAX_LINES) {
+      linesRef.current = linesRef.current.slice(-MAX_LINES);
+    }
+    setLineCount(linesRef.current.length);
+    scrollToBottom();
+  }
 
   function scrollToBottom() {
     if (!autoScroll || !containerRef.current) return;
@@ -941,195 +658,211 @@ function LiveTerminal() {
   function handleScroll() {
     if (!containerRef.current) return;
     const el = containerRef.current;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
-    setAutoScroll(atBottom);
+    setAutoScroll(el.scrollHeight - el.scrollTop - el.clientHeight < 30);
   }
 
   function clear() {
     linesRef.current = [];
+    seenRef.current.clear();
     setLineCount(0);
-    // Reset the polling cursor so the next poll re-fetches everything
-    // (useful right after clearing to see the same events again).
     resetCursor();
   }
 
-  // Filter view (does not mutate the underlying buffer). When the filter is
-  // a content-type token we also check the tag.kind suffix.
-  const visible = (filter === "all"
-    ? linesRef.current
-    : linesRef.current.filter((l) => {
-        const { tone, tag } = classifyLogLine(l.text);
-        if (tone === filter) return true;
-        if (tag && tag.kind.endsWith(`/${filter}`)) return true;
-        return false;
-      })
-  ).slice(-MAX_LINES);
+  // Per-platform counters for the filter chips (also the at-a-glance answer to
+  // "which stream is doing what right now").
+  const counts: Record<string, number> = { instagram: 0, twitter: 0, tiktok: 0 };
+  for (const line of linesRef.current) {
+    if (line.platform && counts[line.platform] !== undefined) counts[line.platform] += 1;
+  }
+
+  const visible = linesRef.current.filter((l) => {
+    if (platformFilter !== "all" && l.platform !== platformFilter) return false;
+    if (level === "all") return true;
+    const tone = levelOf(l.text);
+    if (level === "error") return tone === "error";
+    return tone === "warn" || tone === "error";
+  });
+
+  const errorCount = linesRef.current.filter((l) => levelOf(l.text) === "error").length;
+  const warnCount = linesRef.current.filter((l) => levelOf(l.text) === "warn").length;
+
+  const levelChips: { key: LevelFilter; label: string; count?: number }[] = [
+    { key: "all", label: "Tất cả" },
+    { key: "error", label: "Lỗi", count: errorCount },
+    { key: "warn", label: "Cảnh báo", count: warnCount },
+  ];
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 flex-wrap pb-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted">
-            <Terminal className="h-4 w-4" />
-          </div>
-          <CardTitle className="text-base flex items-center gap-2">
-            Live terminal
-            <span className={cn(
-              "text-[10px] px-1.5 py-0.5 rounded-full font-mono uppercase tracking-wider border",
-              connected === "live" && "status-success",
-              connected === "polling" && "border border-warning/30 text-warning",
-              connected === "connecting" && "status-muted",
-              connected === "offline" && "status-error"
-            )}>
-              {connected === "live" && "● live"}
-              {connected === "polling" && "◐ polling"}
-              {connected === "connecting" && "○ connecting"}
-              {connected === "offline" && "○ offline"}
-            </span>
-          </CardTitle>
-          {job ? (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground ml-2">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              <span>Job <span className="font-mono">#{job.id}</span></span>
-              <span>·</span>
-              <span className="font-mono">{job.new_files_count} new</span>
-              <span>·</span>
-              <span className="font-mono">{formatDuration(elapsed)}</span>
+    <section className="fade-in-up overflow-hidden rounded-[14px] border border-white/[0.07] bg-card">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-white/[0.06] px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <Terminal className="h-3.5 w-3.5 shrink-0 text-ink-2" aria-hidden="true" />
+          <h2 className="text-[13px] font-medium">Nhật ký trực tiếp</h2>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider",
+              connected === "live" && "border-success/30 text-success",
+              connected === "polling" && "border-warning/30 text-warning",
+              connected === "connecting" && "border-white/[0.08] text-ink-3",
+              connected === "offline" && "border-destructive/30 text-destructive"
+            )}
+          >
+            <span
+              className={cn(
+                "h-1 w-1 rounded-full",
+                connected === "live" ? "bg-success" : connected === "polling" ? "bg-warning" : "bg-ink-3"
+              )}
+            />
+            {connected === "live" ? "live" : connected === "polling" ? "polling" : connected}
+          </span>
+          <span className="truncate font-mono text-[10px] text-ink-3">
+            {mounted && running.length > 0
+              ? `${running.length} luồng · ${formatNumber(
+                  running.reduce((sum, j) => sum + (j.new_files_count ?? 0), 0)
+                )} file`
+              : "không có job"}
+            {" · "}
+            {formatNumber(lineCount)} dòng
+          </span>
+        </div>
+
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          {levelChips.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setLevel(c.key)}
+              aria-pressed={level === c.key}
+              className={cn(
+                "rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors",
+                level === c.key
+                  ? "border-white/20 bg-white/[0.08] text-ink"
+                  : "border-transparent text-ink-3 hover:text-ink-2"
+              )}
+            >
+              {c.label}
+              {c.count ? <span className="ml-1 opacity-70">{c.count}</span> : null}
+            </button>
+          ))}
+          <span className="mx-1 h-4 w-px bg-white/[0.08]" />
+          <button
+            type="button"
+            onClick={() => setPlatformFilter("all")}
+            aria-pressed={platformFilter === "all"}
+            className={cn(
+              "rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors",
+              platformFilter === "all"
+                ? "border-white/20 bg-white/[0.08] text-ink"
+                : "border-transparent text-ink-3 hover:text-ink-2"
+            )}
+          >
+            mọi nền tảng
+          </button>
+          {(["instagram", "twitter", "tiktok"] as const).map((p) => {
+            const ui = PLATFORM_UI[p];
+            const n = counts[p] ?? 0;
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPlatformFilter(platformFilter === p ? "all" : p)}
+                title={ui.label}
+                aria-pressed={platformFilter === p}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded border px-2 py-1 font-mono text-[10px] tracking-wider transition-colors",
+                  platformFilter === p
+                    ? ui.chip
+                    : "border-transparent text-ink-3 hover:text-ink-2"
+                )}
+              >
+                <span className={cn("h-1.5 w-1.5 rounded-full", ui.dot, n === 0 && "opacity-30")} />
+                {ui.short}
+                <span className="tabular-nums opacity-70">{formatNumber(n)}</span>
+              </button>
+            );
+          })}
+          <span className="mx-1 h-4 w-px bg-white/[0.08]" />
+          <button
+            type="button"
+            onClick={() => setAutoScroll((v) => !v)}
+            title={autoScroll ? "Tạm dừng cuộn tự động" : "Cuộn tự động"}
+            className="rounded p-1 text-ink-3 transition-colors hover:text-ink"
+          >
+            {autoScroll ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+          </button>
+          <button
+            type="button"
+            onClick={clear}
+            title="Xoá buffer"
+            className="rounded p-1 text-ink-3 transition-colors hover:text-ink"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      </header>
+
+      <div className="relative">
+        <div
+          ref={containerRef}
+          onScroll={handleScroll}
+          className="h-[380px] overflow-y-auto bg-[#08080B] py-1.5 font-mono text-[11px] leading-[1.6]"
+        >
+          {visible.length === 0 ? (
+            <div className="px-4 py-3 text-ink-3">
+              {lineCount === 0
+                ? "▌ chưa có sự kiện — chạy một job ở console phía trên"
+                : "▌ không có dòng nào khớp bộ lọc"}
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground ml-2">
-              <span className="h-2 w-2 rounded-full bg-muted" />
-              <span>No active job</span>
-            </div>
+            visible.map((l, i) => {
+              const tone = levelOf(l.text);
+              const ui = l.platform ? PLATFORM_UI[l.platform] : undefined;
+              return (
+                <div
+                  key={`${l.ts}-${i}`}
+                  className="grid grid-cols-[2.25rem_4.25rem_2rem_minmax(0,1fr)] items-baseline gap-2 px-3 py-[1px] hover:bg-white/[0.03]"
+                >
+                  <span className="select-none text-right tabular-nums text-white/15">
+                    {String(i + 1).padStart(3, " ")}
+                  </span>
+                  <span className="select-none tabular-nums text-ink-3/70">
+                    {new Date(l.ts).toLocaleTimeString("en-GB", { hour12: false })}
+                  </span>
+                  {ui ? (
+                    <span
+                      className={cn(
+                        "inline-flex h-[15px] items-center justify-center rounded border text-[9px] font-semibold tracking-wider",
+                        ui.chip
+                      )}
+                      title={ui.label}
+                    >
+                      {ui.short}
+                    </span>
+                  ) : (
+                    <span className="text-white/10 select-none">·</span>
+                  )}
+                  <span className={cn("whitespace-pre-wrap break-all", TONE_TEXT[tone])}>
+                    {l.text}
+                  </span>
+                </div>
+              );
+            })
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {(["all", "info", "success", "warn", "error"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={cn(
-                "px-2 py-1 rounded text-[10px] font-mono uppercase tracking-wider transition-colors border",
-                filter === f
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground border-transparent"
-              )}
-            >
-              {f}
-            </button>
-          ))}
-          <div className="w-px h-5 bg-border mx-1" />
-          {([
-            { v: "post",      cls: "border border-primary bg-primary text-primary-foreground" },
-            { v: "story",     cls: "border border-primary bg-primary text-primary-foreground" },
-            { v: "highlight", cls: "border border-primary bg-primary text-primary-foreground" },
-            { v: "tweet",     cls: "border border-primary bg-primary text-primary-foreground" },
-            { v: "tiktok",    cls: "border border-primary bg-primary text-primary-foreground" },
-          ] as const).map((f) => (
-            <button
-              key={f.v}
-              onClick={() => setFilter(f.v as any)}
-              className={cn(
-                "px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider transition-colors",
-                filter === f.v
-                  ? f.cls
-                  : "border border-border text-muted-foreground hover:text-foreground"
-              )}
-              title={`Filter ${f.v} events`}
-            >
-              {f.v}
-            </button>
-          ))}
-          <div className="w-px h-5 bg-border mx-1" />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setAutoScroll((v) => !v)}
-            title={autoScroll ? "Pause auto-scroll" : "Resume auto-scroll"}
+        {!autoScroll && (
+          <button
+            type="button"
+            onClick={() => {
+              setAutoScroll(true);
+              scrollToBottom();
+            }}
+            className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-accent backdrop-blur transition-colors hover:bg-accent/15"
           >
-            {autoScroll ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={clear}
-            title="Clear buffer"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="relative">
-          <div className="px-3 py-1.5 text-[10px] text-muted-foreground border-y border-border bg-card flex items-center justify-between">
-            <span className="font-mono">
-              {lineCount === 0
-                ? "Waiting for events… (run a job from the console above)"
-                : `${lineCount} line${lineCount === 1 ? "" : "s"} in buffer · showing ${visible.length}`}
-            </span>
-            {!autoScroll && (
-              <button
-                onClick={scrollToBottom}
-                className="text-primary hover:underline flex items-center gap-1"
-              >
-                <Square className="h-2.5 w-2.5 fill-primary" /> Jump to latest
-              </button>
-            )}
-          </div>
-          <div
-            ref={containerRef}
-            onScroll={handleScroll}
-            className="h-[360px] overflow-y-auto bg-background px-3 py-2 font-mono text-[11px] leading-5 border-t border-border"
-          >
-            {visible.length === 0 ? (
-              <div className="text-muted-foreground italic px-1 py-2">
-                {lineCount === 0
-                  ? "▌ no events yet — start a job above to see live output"
-                  : "▌ no lines match the current filter"}
-              </div>
-            ) : (
-              visible.map((l, i) => {
-                const { tone, tag } = classifyLogLine(l.text);
-                const t = TONE_CLS[tone] ?? TONE_CLS.muted;
-                return (
-                  <div
-                    key={i}
-                    className="group flex gap-3 items-baseline -mx-3 px-3 py-0.5 hover:bg-muted/50 transition-colors"
-                  >
-                    {/* Line number gutter — fades so it doesn't fight the content */}
-                    <span className="text-muted-foreground/40 select-none w-8 flex-shrink-0 text-right tabular-nums">
-                      {String(visible.length - i).padStart(3, " ")}
-                    </span>
-                    {/* Timestamp */}
-                    <span className={cn("select-none w-16 flex-shrink-0 tabular-nums", t.gutter)}>
-                      {new Date(l.ts).toLocaleTimeString("en-GB", { hour12: false })}
-                    </span>
-                    {/* Tone prefix icon */}
-                    <span className={cn("select-none w-3 flex-shrink-0 text-center", t.text)}>
-                      {t.prefix}
-                    </span>
-                    {/* Optional platform/content_type tag — only on the first line of a job */}
-                    {tag && (
-                      <span className={cn(
-                        "px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider flex-shrink-0",
-                        tag.cls,
-                      )}>
-                        {tag.label}
-                      </span>
-                    )}
-                    <span className={cn("whitespace-pre-wrap break-all", t.text)}>
-                      {l.text}
-                    </span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+            <Square className="h-2.5 w-2.5 fill-accent" /> xuống cuối
+          </button>
+        )}
+      </div>
+    </section>
   );
 }

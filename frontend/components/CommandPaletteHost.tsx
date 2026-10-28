@@ -35,16 +35,9 @@ export function CommandPaletteHost() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Thêm nhanh (Ctrl hoặc Command + K)"
-        className="fixed top-5 right-5 z-30 inline-flex h-11 items-center gap-2 rounded-full bg-accent px-4 text-sm font-medium text-background shadow-float transition-transform hover:scale-[1.02] active:scale-[0.98]"
-      >
-        <span aria-hidden="true">+</span>
-        Thêm nhanh
-        <kbd className="rounded border border-black/15 bg-black/10 px-1.5 py-0.5 font-mono text-[10px]">⌘K</kbd>
-      </button>
+      {/* The floating "Thêm nhanh" pill was removed from the header. The
+          palette itself is still reachable with ⌘K / Ctrl+K and from the
+          dashboard's own button. */}
       <CommandPalette open={open} onOpenChange={setOpen} />
     </>
   );

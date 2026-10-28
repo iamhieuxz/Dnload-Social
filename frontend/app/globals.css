@@ -68,6 +68,15 @@ body {
   .font-display-tight {
     @apply font-display font-semibold tracking-[-0.02em];
   }
+  /* Tab labels use the brand display face; weight stays fixed between
+     states so switching tabs never reflows the pill. */
+  .tab-type {
+    @apply font-display text-[13px] font-semibold tracking-[-0.01em];
+  }
+  /* Filter dropdowns share the face, one weight below tabs */
+  .control-type {
+    @apply font-display text-[13px] font-medium tracking-[-0.01em];
+  }
 }
 
 @keyframes shimmer {
@@ -86,6 +95,20 @@ body {
 }
 .fade-in-up {
   animation: fade-in-up 0.4s ease-out backwards;
+}
+
+/* Branded loading bar — static under reduced motion, sweeping otherwise */
+@keyframes loading-sweep {
+  from { transform: translateX(-140%); }
+  to { transform: translateX(320%); }
+}
+.loading-sweep {
+  transform: translateX(0);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .loading-sweep {
+    animation: loading-sweep 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
 }
 
 /* Plan §9: respect reduced motion — keep state changes, drop motion */
