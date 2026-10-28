@@ -693,7 +693,10 @@ function LiveTerminal() {
   ];
 
   return (
-    <section className="fade-in-up overflow-hidden rounded-[14px] border border-white/[0.07] bg-card">
+    <section
+      id="live-terminal"
+      className="fade-in-up overflow-hidden rounded-[14px] border border-white/[0.07] bg-card"
+    >
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-white/[0.06] px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <Terminal className="h-3.5 w-3.5 shrink-0 text-ink-2" aria-hidden="true" />

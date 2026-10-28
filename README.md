@@ -12,6 +12,10 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
+<img src="docs/assets/dashboard.png" alt="Dashboard: status deck, download console, control rail và nhật ký trực tiếp" width="100%" />
+
+> Hai luồng chạy song song, mỗi dòng log mang nhãn nền tảng riêng, nhịp độ tự giãn theo rate limit.
+
 ---
 
 ## Mục lục
@@ -19,7 +23,6 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 - [Tính năng](#tính-năng)
 - [Cách hoạt động](#cách-hoạt-động)
 - [Yêu cầu](#yêu-cầu)
-- [❗ Instagram đang tạm hỏng — đang chờ upstream fix](#-instagram-đang-tạm-hỏng--đang-chờ-upstream-fix)
 - [Cài đặt nhanh (SQLite — không cần Docker)](#cài-đặt-nhanh-sqlite--không-cần-docker)
   - [📄 Hướng dẫn mở FE & BE hàng ngày](docs/RUN.md)
 - [Cài đặt với Docker](#cài-đặt-với-docker)
@@ -42,8 +45,8 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 
 | Nền tảng | Engine | Nội dung hỗ trợ |
 |---|---|---|
-| **Instagram** ⚠️ | gallery-dl | Posts · Stories 24h · Highlights · Reels · Single post — **tạm hỏng, xem [mục bên dưới](#-instagram-đang-tạm-hỏng--đang-chờ-upstream-fix)** |
-| **Twitter / X** | yt-dlp | Tweet · Video · Space đã kết thúc · Live broadcast đã kết thúc |
+| **Instagram** | gallery-dl | Posts · Stories 24h · Highlights · Reels · Single post |
+| **Twitter / X** | gallery-dl (yt-dlp cho Space/broadcast) | Tweet · Video · Space đã kết thúc · Live broadcast đã kết thúc |
 | **TikTok** | gallery-dl | Feed của user · Single video · Short link `vm.tiktok.com` |
 
 - **Nhiều nguồn:** một link, danh sách hàng trăm link, hoặc chọn từ database.
@@ -54,8 +57,9 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 - **Hàng đợi bền vững** — mọi link lưu vào database, không mất khi restart.
 - **Stop & Resume** — dừng giữa chừng không mất tiến độ: archive sqlite của gallery-dl/yt-dlp ghi những gì đã tải, lần sau bỏ qua ngay.
 - **Resume theo từng nền tảng** — badge hiển thị số pending / in-flight / resumable riêng cho IG, X, TikTok.
-- **Fallback cookie** — khi cookie chính bị rate-limit (429), tự chuyển sang cookie dự phòng và dừng ngay cookie bị chặn.
-- **Log thời gian thực** qua WebSocket, lọc theo mức độ (info / success / warn / error).
+- **Song song theo nền tảng** — Instagram và X tải cùng lúc (mỗi nền tảng tối đa một job); nghỉ 18–45s (+12s jitter) giữa các account, 240s sau mỗi 8 account, cooldown 900s ngay khi có tín hiệu throttle, tự dừng job sau 2 tín hiệu liên tiếp.
+- **Dừng đúng lúc khi bị chặn** — thấy dấu hiệu rate-limit là cắt subprocess ngay và nghỉ dài, không xoay cookie để đập tiếp cùng một IP.
+- **Log thời gian thực** qua WebSocket, mỗi dòng mang nhãn nền tảng (IG / X / TT); lọc được theo mức độ và theo nền tảng.
 
 ### Quản lý thư viện
 
@@ -66,7 +70,7 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 ### An toàn
 
 - **Chỉ kill PID của tiến trình mình sinh ra** — không đụng tới `gallery-dl.exe` / `yt-dlp.exe` khác đang chạy trên máy.
-- **Một job tại một thời điểm** (async lock) — tránh hỏng archive khi chạy song song.
+- **Một job cho mỗi nền tảng** (lock riêng từng platform) — IG và X chạy song song được, còn job thứ hai cùng nền tảng bị từ chối vì dùng chung cookie và archive.
 - Cookie mã hoá Fernet khi lưu, `.env` và cookie **không bao giờ** commit lên git.
 
 ---
@@ -81,14 +85,14 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
                                                │
                                     ┌──────────▼───────────┐
                                     │     JobRunner        │
-                                    │  (1 job / lock duy   │
-                                    │   nhất, theo platform)│
+                                    │  1 job / platform,   │
+                                    │ IG ∥ X · riêng lock  │
                                     └──────────┬───────────┘
                           ┌────────────────────┼────────────────────┐
                           ▼                    ▼                    ▼
                  ┌────────────────┐  ┌────────────────┐   ┌──────────────┐
                  │ InstagramService│ │ TwitterService │   │TikTokService │
-                 │   (gallery-dl)  │ │   (yt-dlp)     │   │ (gallery-dl) │
+                 │   (gallery-dl)  │ │ g-dl + yt-dlp  │   │ (gallery-dl) │
                  └────────────────┘  └────────────────┘   └──────────────┘
                           └────────────────────┼────────────────────┘
                                                ▼
@@ -102,7 +106,8 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 
 1. Bạn paste link ở Dashboard → `POST /api/downloads/batch` tạo row `status=pending`.
 2. Bấm **Run pending** → tạo `Job`, gắn các row vào job, chuyển sang `downloading`.
-3. `JobRunner` khóa async lock, chọn đúng service theo platform, chạy subprocess.
+3. `JobRunner` lấy lock của riêng platform đó (IG và X không chặn nhau), chạy subprocess,
+   rồi nghỉ 18–45s trước account kế tiếp.
 4. Service đọc stdout từng dòng, nhận diện file mới → ghi `file_path` + size vào DB.
 5. Job xong → `completed` / `failed` / `stopped`, phát WebSocket cho UI.
 
@@ -114,50 +119,11 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 |---|---|---|
 | **Python** | 3.10+ | Chạy backend |
 | **Node.js** | 18+ | Chạy frontend |
-| **gallery-dl** | commit `569c0dfe9c` | Ghim cố định, xem [Trạng thái Instagram](#-instagram-đang-tạm-hỏng--đang-chờ-upstream-fix) |
+| **gallery-dl** | `>= 1.32.18` | Từ bản này Instagram profile mới chạy lại được (upstream fix GraphQL 2026-10-15) |
 | **yt-dlp** | bất kỳ | Tự cài qua `pip install -r requirements.txt` |
 | **Dung lượng ổ đĩa | tuỳ video | Video TikTok ~5–50 MB mỗi cái |
 
 > **Docker (không bắt buộc)** — nếu chỉ dùng SQLite thì không cần Docker.
-
----
-
-## ! Instagram đang tạm hỏng — đang chờ upstream fix
-
-> Cập nhật **2026-10-21**. Twitter/X và TikTok **không ảnh hưởng**.
-
-**Hiện tượng:** mọi profile Instagram trả về `No output file found` dù tài khoản có bài đăng. Stories và link post trực tiếp (`/p/<code>/`) không bị ảnh hưởng.
-
-**Nguyên nhân — không phải lỗi của Dnload Social.** Từ **2026-10-15**, Instagram từ chối các query GraphQL `PolarisProfilePageContentQuery` và `PolarisProfilePostsTabContentQuery`. HTTP trả về `200` nhưng body chứa lỗi:
-
-```json
-{"errors":[{"message":"A server error missing_required_variable_value occured.",
-  "severity":"CRITICAL",
-  "code":1675012,
-  "summary":"Your Request Couldn't be Processed"}]}
-```
-
-gallery-dl đọc `["data"]` → gặp `KeyError` → báo `NotFoundError: Requested user could not be found` → dừng với exit code khác 0, không file nào được tải.
-
-**Không phải do cookie của bạn.** Đã kiểm chứng:
-
-| Kiểm tra | Kết quả |
-|---|---|
-| `sessionid` còn hạn | ✅ còn **153 ngày** |
-| Lỗi tái hiện trên gallery-dl 1.32.16 | ✅ giống hệt |
-| Lỗi tái hiện trên gallery-dl 1.32.17 | ✅ giống hệt |
-| **TikTok, cùng cookie & cùng IP** | ✅ **vẫn tải bình thường** |
-
-**Đang chờ gì:** bản vá nằm ở commit [`569c0dfe9c`](https://codeberg.org/mikf/gallery-dl/commit/569c0dfe9c) của gallery-dl — bổ sung các trường `__relay_internal__pv__Polaris…relayprovider` mà Instagram mới yêu cầu. Hiện **chưa có bản release nào chứa bản vá này**, và `master` HEAD còn lỗi riêng (`404` tại `/web/search/topsearch/`), nên `requirements.txt` ghim đúng commit đó.
-
-Theo dõi tình trạng:
-
-- Issue chính: [mikf/gallery-dl#519](https://codeberg.org/mikf/gallery-dl/issues/519)
-- Issue đã đóng nhưng cùng nguyên nhân: [#9816](https://github.com/mikf/gallery-dl/issues/9816), [#9818](https://github.com/mikf/gallery-dl/issues/9818)
-
-**Khi nào hết lỗi:** khi upstream release bản tag mới chứa bản vá, đổi dòng ghim trong `backend/requirements.txt` từ commit sang số version. Không cần sửa code nào khác.
-
-> ⚠️ **Không tự export cookie lại** — cookie của bạn vẫn còn hạn, việc này không giúp ích.
 
 ---
 
@@ -322,7 +288,11 @@ Vào **Settings** → upload cookie:
 
 ### 3. Theo dõi tiến trình
 
-- **Live terminal** ở Dashboard hiển thị log thời gian thực.
+- **Live terminal** ở Dashboard hiển thị log thời gian thực, mỗi dòng có nhãn nền tảng (IG / X / TT)
+  và bộ lọc riêng theo nền tảng lẫn mức độ.
+
+  <img src="docs/assets/terminal.png" alt="Live terminal: mỗi dòng log mang nhãn IG hoặc X" width="100%" />
+
 - **Stop** dừng an toàn: tiến trình con bị kết thúc, các row đang chạy trả về `pending`.
 - **Resume** chạy tiếp, tự bỏ qua file đã tải.
 
