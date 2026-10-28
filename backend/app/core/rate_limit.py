@@ -14,7 +14,12 @@ logger = logging.getLogger(__name__)
 
 
 LIMIT_KEYWORDS = (
-    "429",
+    # Deliberately *not* a bare "429": X media filenames are 19-digit tweet
+    # ids, so a plain substring match would read a healthy download line as a
+    # throttle signal and abort the run every few hundred files.
+    "error 429",
+    "429: too many",
+    "status code: 429",
     "too many requests",
     "rate limit",
     "ratelimit",
@@ -28,6 +33,15 @@ LIMIT_KEYWORDS = (
 )
 
 
+def detect_limit_signal(line: str) -> bool:
+    """Whether a gallery-dl / yt-dlp output line reports throttling.
+
+    Shared by every platform service: Instagram used to be the only caller,
+    which meant X's 429s were detected by a looser private copy of this list.
+    """
+    return any(kw in line.lower() for kw in LIMIT_KEYWORDS)
+
+
 @dataclass(slots=True)
 class RateLimitPolicy:
     min_delay_seconds: int = 18
@@ -37,6 +51,26 @@ class RateLimitPolicy:
     suspected_limit_cooldown_seconds: int = 900
     jitter_seconds: int = 12
     max_limit_signals_before_stop: int = 2
+
+
+def policy_from_settings() -> RateLimitPolicy:
+    """Build the policy from `app.config` so the `rate_limit_*` knobs (and the
+    values /api/settings reports) actually drive behaviour.
+
+    Importing config lazily keeps this module importable from tests that have
+    no settings/env loaded.
+    """
+    from app.config import get_settings
+
+    s = get_settings()
+    return RateLimitPolicy(
+        min_delay_seconds=s.rate_limit_min_delay,
+        max_delay_seconds=s.rate_limit_max_delay,
+        batch_size=s.rate_limit_batch_size,
+        batch_cooldown_seconds=s.rate_limit_batch_cooldown,
+        suspected_limit_cooldown_seconds=s.rate_limit_limit_cooldown,
+        max_limit_signals_before_stop=s.rate_limit_max_signals,
+    )
 
 
 class RateLimitGuard:
@@ -54,7 +88,7 @@ class RateLimitGuard:
         return self._limit_signals
 
     def detect_limit_signal(self, line: str) -> bool:
-        return any(kw in line.lower() for kw in LIMIT_KEYWORDS)
+        return detect_limit_signal(line)
 
     def record_limit_signal(self, source: str) -> bool:
         self._limit_signals += 1

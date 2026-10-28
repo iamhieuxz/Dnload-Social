@@ -26,7 +26,7 @@ from app.core.process_manager import (
     resolve_gallery_dl_executable,
     resolve_ytdlp_executable,
 )
-from app.core.rate_limit import RateLimitGuard, RateLimitPolicy
+from app.core.rate_limit import RateLimitGuard, RateLimitPolicy, policy_from_settings
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class InstagramService:
         policy: RateLimitPolicy | None = None,
         tuning: GalleryDlTuning | None = None,
     ) -> None:
-        self.policy = policy or RateLimitPolicy()
+        self.policy = policy or policy_from_settings()
         self.guard = RateLimitGuard(self.policy)
         self.tuning = tuning or GalleryDlTuning()
         self.runner = AsyncProcessRunner()
@@ -88,6 +88,15 @@ class InstagramService:
         generator would block waiting for the next stdout line, which
         can take minutes if the download is paused / rate-limited."""
         self._stop_requested = True
+        await self.runner.stop(grace_seconds=2.0)
+
+    async def abort_current(self) -> None:
+        """Kill only the in-flight gallery-dl run and stay usable.
+
+        The per-row deadline has to abandon one profile and keep the job
+        alive; `request_stop_async` sets the sticky `_stop_requested`
+        flag, which the runner reads as "user pressed Stop" and turns the
+        whole job STOPPED — silently abandoning every queued account."""
         await self.runner.stop(grace_seconds=2.0)
 
     @property
@@ -442,6 +451,7 @@ class InstagramService:
                 return
             cookie_files = [None]  # type: ignore[list-item]
 
+        limit_line = ""
         for index, cookie_path in enumerate(cookie_files, start=1):
             saw_limit = False
             async for event in self._execute_one(
@@ -452,6 +462,8 @@ class InstagramService:
             ):
                 if event.get("type") == "limit_signal":
                     saw_limit = True
+                    limit_line = event.get("line") or ""
+                    self.guard.record_limit_signal(url)
                     # FIX C5: Abort fallback to next cookie IMMEDIATELY;
                     # do not yield further media events from the throttled cookie.
                     break
@@ -464,6 +476,11 @@ class InstagramService:
             if index < len(cookie_files) and not self._stop_requested:
                 logger.warning("Cookie #%s hit a rate limit; trying backup cookie...", index)
                 await self.guard.wait_after_limit_signal(stop_requested=lambda: self._stop_requested)
+
+        # Reaching here means every cookie in the set came back throttled.
+        # Surface that to the JobRunner so it cools the session down before
+        # pointing the same cookie at the next account, instead of hammering.
+        yield {"type": "rate_limited", "line": limit_line, "url": url}
 
     async def _execute_one(
         self,
@@ -550,8 +567,10 @@ class InstagramService:
                     yield {"type": "warn", "code": "empty_file", "line": filename}
                     continue
 
-                marker = "[NEW]" if is_new else "[SKIP]"
-                logger.info("%s %s", marker, filename)
+                # No per-file log here: JobRunner already emits one [NEW] line
+                # per file, and logging it twice doubled every row in the UI
+                # terminal. Skips are not logged at all — a resume walk prints
+                # thousands of them.
                 if is_new:
                     self._new_files_count += 1
                 yield {
@@ -604,7 +623,10 @@ class InstagramService:
             cmd.extend(["--cookies", os.path.normpath(cookie_file)])
 
         archive = dest_path / self.archive_name
-        cmd.extend(["--download-archive", str(archive), "--abort", "20"])
+        # No `--abort`: gallery-dl's -A counts consecutive *skips*, so "-A 20"
+        # ended a profile walk as soon as the newest 20 files were already in
+        # the archive and the row was filed as completed after ~2 seconds.
+        cmd.extend(["--download-archive", str(archive)])
 
         if limit_range and not disable_range:
             cmd.extend(["--range", limit_range])

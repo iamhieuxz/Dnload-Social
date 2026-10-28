@@ -69,7 +69,10 @@ class Settings(BaseSettings):
     rate_limit_max_signals: int = 2
 
     # ----- Job runner -----
-    max_concurrent_jobs: int = 1  # Critical fix C1: only 1 job at a time
+    # Total cap across platforms. The real invariant is one job *per* platform
+    # (its cookie + download archive belong to that run), so 2 lets Instagram
+    # and X proceed in parallel while a second Instagram job is still rejected.
+    max_concurrent_jobs: int = 2
     job_lock_timeout_seconds: int = 5
 
     def get_download_folder(self) -> Path:

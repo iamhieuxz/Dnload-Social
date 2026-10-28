@@ -31,6 +31,7 @@ from app.core.process_manager import (
     resolve_gallery_dl_executable,
     resolve_ytdlp_executable,
 )
+from app.core.rate_limit import detect_limit_signal
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,11 @@ class TwitterService:
         self._stop_requested = True
         await self.runner.stop(grace_seconds=2.0)
 
+    async def abort_current(self) -> None:
+        """Kill the in-flight subprocess but keep the service usable for the
+        next row — see `InstagramService.abort_current`."""
+        await self.runner.stop(grace_seconds=2.0)
+
     @property
     def is_running(self) -> bool:
         return self.runner.is_running
@@ -106,13 +112,17 @@ class TwitterService:
         used as a fallback for the destination folder when the URL itself
         doesn't carry a screen-name (live URLs).
 
+        `run_id` is accepted because JobRunner passes it to every service, but
+        X keeps one archive per account folder (so a stopped bulk run resumes),
+        which means it has no use for it.
+
         Yields dict events: user_start, media, warn, error, done.
         """
         normalized = self._normalize_url(url)
         live_kind = self._detect_live_url(normalized)
         if live_kind is not None:
             async for event in self._download_live(
-                normalized, live_kind, cookie_files or [], author, run_id,
+                normalized, live_kind, cookie_files or [], author,
             ):
                 yield event
             return
@@ -123,7 +133,7 @@ class TwitterService:
         os.makedirs(dest, exist_ok=True)
 
         yield {"type": "user_start", "user": username, "index": 1, "total": 1}
-        async for event in self._download_with_fallback(normalized, dest, cookie_files or [], run_id=run_id):
+        async for event in self._download_with_fallback(normalized, dest, cookie_files or []):
             yield event
         yield {"type": "user_done", "user": username}
 
@@ -199,7 +209,6 @@ class TwitterService:
         live_kind: str,
         cookie_files: list[str],
         author: str | None,
-        run_id: str | None,
     ) -> AsyncIterator[dict]:
         """Spaces / broadcasts path — uses yt-dlp and lands in the right folder.
 
@@ -219,7 +228,7 @@ class TwitterService:
 
         yield {"type": "user_start", "user": folder_name, "index": 1, "total": 1}
         async for event in self._download_with_fallback(
-            url, dest, cookie_files, live=live_kind, run_id=run_id,
+            url, dest, cookie_files, live=live_kind,
         ):
             yield event
         yield {"type": "user_done", "user": folder_name}
@@ -231,28 +240,40 @@ class TwitterService:
         cookie_files: list[str],
         *,
         live: str | None = None,
-        run_id: str | None = None,
     ) -> AsyncIterator[dict]:
         if not cookie_files:
             cookie_files = []
 
         # Try each cookie file in order
         cookies_to_try = cookie_files or [None]
+        limit_line: str | None = None
         for cookie_path in cookies_to_try:
             if self._stop_requested:
                 return
             try:
                 had_error = False
-                async for event in self._execute_one(url, dest, cookie_path, live=live, run_id=run_id):
+                async for event in self._execute_one(url, dest, cookie_path, live=live):
+                    if event.get("type") == "rate_limited":
+                        limit_line = event.get("line") or "rate limited"
+                        break
                     if event.get("type") == "error":
                         had_error = True
                     yield event
+                if limit_line:
+                    # A second cookie is not a second budget: X throttles the
+                    # session and the IP behind it, so cycling the cookie set
+                    # just widens the block. Stop the row and let the runner
+                    # cool down.
+                    break
                 if not had_error:
                     return
             except Exception as e:
                 logger.exception("download run failed: %s", e)
                 yield {"type": "error", "message": str(e)}
                 return
+
+        if limit_line:
+            yield {"type": "rate_limited", "line": limit_line, "url": url}
 
     async def _execute_one(
         self,
@@ -261,10 +282,8 @@ class TwitterService:
         cookie_file: str | None,
         *,
         live: str | None = None,
-        run_id: str | None = None,
     ) -> AsyncIterator[dict]:
-        import time as _time
-        cmd = self._build_command(url, dest, cookie_file, live=live, run_id=run_id)
+        cmd = self._build_command(url, dest, cookie_file, live=live)
         is_ytdlp = live is not None
         # Count files before we start — both engines set mtime from the
         # original social-media post date, not download time, and the
@@ -280,6 +299,7 @@ class TwitterService:
             downloaded_files: list[Path] = []
             error_seen: str | None = None
             rate_limited = False
+            limit_line: str = ""
 
             async for line in self.runner.stream_output():
                 if self._stop_requested:
@@ -289,9 +309,15 @@ class TwitterService:
                     continue
                 lower = stripped.lower()
 
-                # Detect rate-limit (same as x_tool3.py)
-                if any(err in lower for err in ("429", "rate limit", "too many requests")):
-                    rate_limited = True
+                # Detect rate-limit — same keywords as Instagram, from one
+                # shared list. Kill the run on the first hit: each further
+                # request on a throttled session makes the block longer, and
+                # gallery-dl would keep paging for minutes otherwise.
+                if detect_limit_signal(lower):
+                    if not rate_limited:
+                        rate_limited = True
+                        limit_line = stripped
+                        await self.runner.stop(grace_seconds=2.0)
 
                 # Track new file downloads. yt-dlp emits several line
                 # shapes; the working x_tool3.py parses by substring
@@ -354,7 +380,11 @@ class TwitterService:
             rc = await self.runner.wait()
 
             if rate_limited:
-                yield {"type": "error", "message": "Rate limit exceeded (429). Cookie may be blocked by X. Wait 4-6 hours."}
+                # A pacing signal, not a row failure: JobRunner holds it
+                # against the run so the session gets its cooldown (and the
+                # job stops after two in a row) instead of pointing the next
+                # account at a blocked cookie.
+                yield {"type": "rate_limited", "line": limit_line[:200]}
                 return
 
             if rc not in (0, None) and not error_seen:
@@ -415,32 +445,34 @@ class TwitterService:
         cookie_file: str | None,
         *,
         live: str | None = None,
-        run_id: str | None = None,
     ) -> list[str]:
         dest_path = Path(destination).expanduser()
 
         # Live (Spaces / broadcasts) → yt-dlp. Plain tweet / user / video
         # → gallery-dl, which has better per-tweet metadata handling.
         if live is not None:
-            return self._build_ytdlp_command(url, dest_path, cookie_file, live=live, run_id=run_id)
+            return self._build_ytdlp_command(url, dest_path, cookie_file, live=live)
 
         cmd: list[str] = [
             *resolve_gallery_dl_executable(),
             url,
             "--destination", str(dest_path),
-            "--sleep-request", "3-10",
-            "--sleep", "1-5",
+            # A user timeline is the bulk case here (hundreds of accounts, some
+            # with years of media), so the pacing is per-request rather than
+            # the "3-10" that was fine for one-off tweet links.
+            "--sleep-request", "5-12",
+            "--sleep", "2-6",
+            "--retries", "6",
+            "--http-timeout", "60",
             "-o", "cache.file=none",
             "-o", 'directory=["."]',
         ]
 
-        # Each run gets its own archive so the "files before vs after" comparison
-        # always reflects this run's output, not a previous run's.
-        if run_id:
-            archive = dest_path / f".archive-{run_id}.sqlite"
-        else:
-            archive = dest_path / self.archive_name
-        cmd.extend(["--download-archive", str(archive)])
+        # One archive per account folder, like Instagram. The per-run archive
+        # this replaced (`.archive-<row id>.sqlite`) meant every retry of a
+        # stopped account re-walked the whole timeline from zero, and left a
+        # new sqlite file behind for each row.
+        cmd.extend(["--download-archive", str(dest_path / self.archive_name)])
 
         if cookie_file and os.path.exists(cookie_file):
             cmd.extend(["--cookies", os.path.normpath(cookie_file)])
@@ -454,7 +486,6 @@ class TwitterService:
         cookie_file: str | None,
         *,
         live: str,
-        run_id: str | None,
     ) -> list[str]:
         """yt-dlp command for an ENDED Space or broadcast.
 
@@ -487,14 +518,9 @@ class TwitterService:
             "--fragment-retries", "5",
         ]
 
-        # Archive (skip if already downloaded). One archive per run, just
-        # like the gallery-dl path, so "files before vs after" stays
-        # scoped to this run.
-        if run_id:
-            archive = dest_path / f".yt-archive-{run_id}.txt"
-        else:
-            archive = dest_path / self.ytdlp_archive_name
-        cmd.extend(["--download-archive", str(archive)])
+        # Archive (skip if already downloaded), one per account folder for the
+        # same reason as the gallery-dl path: a stopped run resumes.
+        cmd.extend(["--download-archive", str(dest_path / self.ytdlp_archive_name)])
 
         if cookie_file and os.path.exists(cookie_file):
             cmd.extend(["--cookies", os.path.normpath(cookie_file)])

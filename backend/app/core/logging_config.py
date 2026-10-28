@@ -50,12 +50,24 @@ class WebSocketLogHandler(logging.Handler):
     focused on what actually changed (files, errors, rate-limits).
     """
 
-    def __init__(self, job_id: int) -> None:
+    def __init__(self, job_id: int, platform: str | None = None) -> None:
         super().__init__()
         self.job_id = job_id
+        # Stamped onto every line so the dashboard terminal can colour-code
+        # which stream (Instagram / X / TikTok) produced it. Two jobs run at
+        # the same time now, and a bare "[NEW] file.jpg" is ambiguous.
+        self.platform = platform
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
+            # One handler is attached per running job, and the root logger
+            # feeds all of them — so without this filter every line would be
+            # broadcast once per job, each copy tagged with that job's
+            # platform. UI-facing lines therefore stamp `extra={"job_id": …}`
+            # at the call site in JobRunner, and a record with no job_id is
+            # treated as internal.
+            if getattr(record, "job_id", None) != self.job_id:
+                return
             msg = self.format(record)
             if not _is_ui_visible(msg):
                 # Internal log line — keep in stdout (root logger
@@ -76,9 +88,18 @@ class WebSocketLogHandler(logging.Handler):
                         "level": record.levelname,
                         "message": msg,
                         "job_id": self.job_id,
+                        "platform": self.platform,
                     }
                 )
-            payload = {"job_id": self.job_id, "level": record.levelname, "message": msg}
+            payload = {
+                "job_id": self.job_id,
+                "level": record.levelname,
+                "message": msg,
+                "platform": self.platform,
+                # Same value the polling transport reports, so a client that
+                # receives the event over both paths can dedupe on it.
+                "ts": record.created,
+            }
             # 1) per-job channel (for the dedicated job log page)
             ws_manager.broadcast_sync(
                 channel=f"job:{self.job_id}",

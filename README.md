@@ -271,11 +271,20 @@ Tất cả tuỳ chọn nằm trong `backend/.env` (xem `.env.example`):
 | `tiktok_download_folder` | `E:/gallery-dl/tiktok` | Nơi lưu TikTok |
 | `cookie_folder` | `./secrets/cookies` | Nơi lưu file cookie |
 | `cookie_encryption_key` | *(rỗng)* | Khoá Fernet — bắt buộc nếu muốn upload cookie |
-| `rate_limit_min_delay` | `18` | Giây nghỉ tối thiểu giữa các request |
-| `rate_limit_max_delay` | `45` | Giây nghỉ tối đa |
-| `rate_limit_batch_size` | `8` | Số request trước khi nghỉ dài |
+| `rate_limit_min_delay` | `18` | Giây nghỉ tối thiểu giữa hai account |
+| `rate_limit_max_delay` | `45` | Giây nghỉ tối đa giữa hai account (+ jitter 12s) |
+| `rate_limit_batch_size` | `8` | Số account trước khi nghỉ dài |
 | `rate_limit_batch_cooldown` | `240` | Giây nghỉ dài sau một batch |
-| `max_concurrent_jobs` | `1` | **Nên giữ = 1** để không hỏng archive |
+| `rate_limit_limit_cooldown` | `900` | Giây nghỉ ngay khi gallery-dl trả về dấu hiệu throttle |
+| `rate_limit_max_signals` | `2` | Số signal liên tiếp thì dừng job để bảo vệ session |
+
+Hai biến tuỳ chọn (đặt trong môi trường chạy uvicorn) — giới hạn thời gian cho **một** download row, hết hạn thì row đó thành `failed` và queue đi tiếp; `--download-archive` khiến lần chạy sau nối đúng vào chỗ cũ:
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `DOWNLOAD_TOTAL_DEADLINE_SECONDS` | `1800` | Link đơn lẻ (1 post/reel) |
+| `DOWNLOAD_PROFILE_TOTAL_DEADLINE_SECONDS` | `86400` | Cả profile — tài khoản vài nghìn post thật sự cần 5-8 giờ, đặt thấp sẽ cắt ngang download |
+| `max_concurrent_jobs` | `2` | Tổng số job chạy đồng thời. Bất biến thật là **tối đa 1 job cho mỗi nền tảng** (job thứ hai cùng nền tảng bị từ chối vì trùng cookie + archive), nên 2 = Instagram và X tải song song |
 
 ---
 

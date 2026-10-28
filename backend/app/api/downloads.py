@@ -6,11 +6,11 @@ from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import func, nullslast, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Download, DownloadStatus
+from app.models import Account, Download, DownloadStatus
 from app.schemas import DownloadListResponse, DownloadOut, DownloadStats
 from app.core.url_guard import validate_url as _validate_download_url
 
@@ -299,13 +299,22 @@ async def from_highlight_ids(
 @router.post("/run-pending", status_code=201)
 async def run_pending(
     platform: str = Query(...),
+    limit: int | None = None,
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Take all pending downloads of a platform, create a Job, attach the
+    """Take pending downloads of a platform, create a Job, attach the
     downloads to it, and hand off to the JobRunner.
 
     This is the only entry point the UI uses to actually start a download.
+
+    `limit` claims only the N biggest pending accounts. Rows are claimed
+    heaviest-first (from the disk scan), so it bounds a run to the N profiles
+    that matter most instead of committing every queued account at once — the
+    lever for "download the 10 biggest profiles, then let the session rest".
+
+    Two platforms can be claimed at the same time; the same platform cannot,
+    because its cookie and archives are already in use by the running job.
     """
     from app.models import Job, JobStatus, JobType, Platform as Plat
     from app.services.job_runner import job_runner
@@ -328,16 +337,29 @@ async def run_pending(
             await db.rollback()
             raise HTTPException(status_code=409, detail="Another job is currently running")
 
-    if job_runner.is_busy:
+    if job_runner.is_busy_for(plat_enum.value):
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Another job is currently running")
+        raise HTTPException(
+            status_code=409,
+            detail=f"A {plat_enum.value} job is already running — its cookie and download archive are in use.",
+        )
 
-    rows = (await db.execute(
-        select(Download).where(
+    # Biggest account first. The disk scan recorded how much each account
+    # holds, so `limit=N` claims the N heaviest profiles rather than the N
+    # oldest rows; rows with no scanned account (pasted links) keep id order
+    # behind them.
+    claim = (
+        select(Download)
+        .outerjoin(Account, Account.id == Download.account_id)
+        .where(
             Download.platform == plat_enum.value,
             Download.status == DownloadStatus.PENDING,
-        ).order_by(Download.id.asc())
-    )).scalars().all()
+        )
+        .order_by(nullslast(Account.total_size_bytes.desc()), Download.id.asc())
+    )
+    if limit:
+        claim = claim.limit(limit)
+    rows = (await db.execute(claim)).scalars().all()
 
     if not rows:
         await db.commit()

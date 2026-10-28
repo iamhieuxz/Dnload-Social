@@ -8,6 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.logging_config import get_job_logs
 from app.database import get_db
 from app.models import Job, JobStatus
@@ -25,10 +26,15 @@ async def create_job(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> JobOut:
-    if job_runner.is_busy:
+    # Platform-agnostic cap: this endpoint doesn't know which platform the job
+    # will end up driving (that comes from its Download rows), so it can only
+    # enforce the total. `JobRunner.enqueue` then rejects a job whose own
+    # platform is already busy.
+    if len(job_runner.active_job_ids) >= get_settings().max_concurrent_jobs:
         raise HTTPException(
             status_code=409,
-            detail="Another job is currently running. Please wait for it to finish or stop it first.",
+            detail="The maximum number of concurrent jobs is already running. "
+                   "Stop one first or raise `max_concurrent_jobs`.",
         )
 
     job = Job(
@@ -89,9 +95,11 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)) -> JobOut:
 
 @router.post("/{job_id}/stop")
 async def stop_job(job_id: int) -> dict:
-    if job_runner.current_job_id != job_id:
+    if job_id not in job_runner.active_job_ids:
         raise HTTPException(status_code=409, detail="Job is not currently running")
-    await job_runner.request_stop()
+    # Targeted: with Instagram and X running side by side, stopping one must
+    # not kill the other's subprocess.
+    await job_runner.request_stop(job_id)
     return {"stopping": job_id}
 
 
@@ -103,7 +111,7 @@ async def get_job_logs_endpoint(job_id: int, limit: int = Query(500, ge=1, le=50
 
 @router.delete("/{job_id}")
 async def delete_job(job_id: int, db: AsyncSession = Depends(get_db)) -> dict:
-    if job_runner.current_job_id == job_id:
+    if job_id in job_runner.active_job_ids:
         raise HTTPException(status_code=409, detail="Cannot delete a running job")
     job = await db.get(Job, job_id)
     if job is None:

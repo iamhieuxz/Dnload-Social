@@ -388,6 +388,17 @@ chỉ fix code, chưa có automated test.
 | ✓ | B-32 🟡 | `/api/gallery/raw` & `/download` không cache | `api/gallery.py` | `Cache-Control: private, max-age=600` (2 endpoint) |
 | ✓ | B-37 🔵 | Sidebar logo không clickable | `components/Sidebar.tsx` | Bọc bằng `<Link href="/">` (UI) |
 | ✓ | B-38 🔵 | `record_event` chỉ polling, không WS broadcast | `core/logging_config.py` | `ws_manager.broadcast_sync("system", ...)`; `test_record_event_broadcasts.py` |
+| ✓ | B-2026-10-28-01 🔴 | `--abort 20` cắt ngang profile lớn — gallery-dl `-A` đếm **file skip liên tiếp**, không đếm lỗi. Run resume dừng sau ~2s khi 20 file mới nhất đã có trong archive, row bị ghi `completed` với >90% media còn thiếu | `services/instagram.py` | Bỏ `--abort`, giữ `--download-archive`; `test_queue_pacing_and_partial_timeout.py` |
+| ✓ | B-2026-10-28-02 🔴 | Một deadline 1800s chung cho mọi row; row quá hạn đã có file nên rơi vào nhánh thành công → `completed`. Job gọi `request_stop_async` nên cả queue STOPPED sau 1 account | `services/job_runner.py` | Deadline riêng cho profile (`DOWNLOAD_PROFILE_TOTAL_DEADLINE_SECONDS`), `abort_current()` không sticky, row quá hạn = `failed` |
+| ✓ | B-2026-10-28-03 🟠 | Bấm Stop giữa chừng sau khi file đầu tiên ghi xong → row lưu `completed`, phần còn lại không bao giờ được queue lại | `services/job_runner.py` | Row đang chạy khi stop trở về `pending` (khớp "perfect stop" reset) |
+| ✓ | B-2026-10-28-04 🟠 | Các knob `rate_limit_*` trong Settings không đổi được hành vi — policy luôn là hardcode default | `core/rate_limit.py` | `policy_from_settings()`; `InstagramService` + `JobRunner` dựng guard từ nó |
+| ✓ | B-2026-10-28-05 🟠 | `record_limit_signal()` không nơi nào gọi; `RateLimitGuard` không xuất hiện trên đường chạy queue → run hàng loạt hammer Instagram | `services/instagram.py`, `services/job_runner.py` | Event `rate_limited` từ service + `_pace_after_row`: nghỉ 18–45s (+jitter) giữa các account, cooldown 900s khi có signal, dừng job sau 2 signal liên tiếp |
+| ✓ | B-2026-10-28-06 🔴 | Archive của X đặt theo **run** (`.archive-<row id>.sqlite`) → account bị dừng phải đi lại toàn bộ timeline từ đầu, mỗi row để lại một file sqlite trong thư mục | `services/twitter.py` | Archive cố định theo account (`.gallery-dl-archive.sqlite`), yt-dlp cũng vậy; `test_twitter_bulk_pacing.py` |
+| ✓ | B-2026-10-28-07 🟠 | 429 của X chỉ thành `error`: runner không cooldown, không đếm streak, và rotate sang cookie khác trên cùng IP | `services/twitter.py` | Sự kiện `rate_limited` + `detect_limit_signal` dùng chung, dừng rotate cookie khi throttle; `test_throttle_stops_the_cookie_rotation` |
+| ✓ | B-2026-10-28-08 🔴 | `LIMIT_KEYWORDS` chứa `"429"` trần, còn gallery-dl in lại đường dẫn file đang tải — ID tweet 19 chữ số chạm chuỗi này nên lượt tải healthy bị cắt sau vài trăm file | `core/rate_limit.py` | "error 429" / "429: too many" / "status code: 429"; `test_tweet_id_filenames_are_not_throttle_signals` |
+| ✓ | B-2026-10-28-09 🟠 | `JobRunner` dùng một lock toàn cục và gắn state (`_services`, `_new_files`, `_row_saw_limit`) trên chính nó → không tải song song theo nền tảng được; job sau ghi đè state job trước | `services/job_runner.py`, `api/jobs.py`, `api/downloads.py` | `_JobState` cho từng job + lock theo nền tảng + honour `max_concurrent_jobs`; `test_per_platform_concurrency.py` (4 test) |
+| ✓ | B-2026-10-28-10 🔴 | `with TestClient(app)` chạy lifespan thật → `_reset_stale_jobs()` ghi vào `data/igdownloader.db` và đánh FAILED job đang tải thật của người dùng | `tests/conftest.py` | conftest trỏ `DATABASE_URL` sang file SQLite tạm + tạo schema; đã kiểm chứng mtime DB thật không đổi |
+|   | B-2026-10-28-11 🟡 | SQLite chưa bật WAL/busy timeout trong khi hai job cùng commit sau mỗi row → dễ `database is locked` | `database.py` | `journal_mode=WAL` + `synchronous=NORMAL` + `busy_timeout=30000` qua connect event |
 | ✓ | B-41 🔵 | `gallery.search` sort không stable khi cùng ctime | `api/gallery.py` | Secondary sort theo `name`; `test_gallery_search_stable_sort.py` |
 | ✓ | B-45 🔵 | `docker-compose` không có healthcheck | `docker-compose.yml` | Backend healthcheck 10s + frontend `depends_on: condition: service_healthy` |
 |   | B-C1 | JobRunner race double-click → 2 job | `job_runner.py` | asyncio.Lock acquired trước DB work |
@@ -419,13 +430,13 @@ _(chưa có — sẽ thêm khi quyết định "không làm" một mục nào)_
 
 ---
 
-## Tổng kết (cập nhật 2026-10-17)
+## Tổng kết (cập nhật 2026-10-28)
 
 - **Open:** 30 (1 🔴, 4 🟠, 19 🟡, 5 🔵) — 14 bug trước đây đã fix
   và có test, chuyển xuống Resolved.
-- **Resolved:** 32 (15 có ✓ test, 17 fix-only cũ + đầu dự án)
+- **Resolved:** 43 (25 có ✓ test, 18 fix-only cũ + đầu dự án)
 - **Won't Fix:** 0
-- **Test coverage:** `pytest backend/tests/` → 52/52 PASS
+- **Test coverage:** `pytest backend/tests/` → 78/78 PASS (test chạy trên SQLite tạm, không đụng DB thật)
 
 Cấu trúc ID:
 - `B-C1..B-C6` (dự án ban đầu) — fix, không có test thời điểm đó.

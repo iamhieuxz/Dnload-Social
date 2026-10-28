@@ -9,20 +9,7 @@ pydantic-settings>=2.4.0
 python-multipart>=0.0.12
 aiofiles>=24.1.0
 websockets>=13.1
-# Instagram broke on 2026-10-15: the PolarisProfilePageContentQuery /
-# PolarisProfilePostsTabContentQuery GraphQL calls return HTTP 200 with a
-# "missing_required_variable_value" error body (code 1675012), so every
-# profile silently looks empty (mikf/gallery-dl#519, github#9815/#9816/#9818).
-#
-# The fix adds the __relay_internal__pv__Polaris…relayprovider fields
-# Instagram now requires. It is NOT in any tagged release — 1.32.17 does
-# not contain it — and master HEAD currently fails differently
-# (`user_by_search` hits a 404 on /web/search/topsearch/), so pin the exact
-# commit that upstream reported as working rather than master.
-#
-# shortcut: an upstream commit pin, not a version. Bump to the next tagged
-# release once one ships with this fix.
-gallery-dl @ git+https://codeberg.org/mikf/gallery-dl@569c0dfe9c
+gallery-dl>=1.32.18
 yt-dlp>=2024.10.7
 cryptography>=43.0.0
 python-dotenv>=1.0.1

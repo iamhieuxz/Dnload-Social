@@ -72,5 +72,6 @@ _*_backend.out
 _*_backend.err
 _*_frontend.out
 _*_frontend.err
-backend/data/*.db
+# Runtime database + backups/WAL/SHM — never commit
+backend/data/
 backend/*.log.err
