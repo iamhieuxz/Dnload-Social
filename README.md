@@ -121,7 +121,7 @@ Paste link (một hoặc hàng trăm), hệ thống tải về đúng thư mục
 | **Node.js** | 18+ | Chạy frontend |
 | **gallery-dl** | `>= 1.32.18` | Từ bản này Instagram profile mới chạy lại được (upstream fix GraphQL 2026-10-15) |
 | **yt-dlp** | bất kỳ | Tự cài qua `pip install -r requirements.txt` |
-| **Dung lượng ổ đĩa | tuỳ video | Video TikTok ~5–50 MB mỗi cái |
+| **Dung lượng ổ đĩa** | tuỳ nhu cầu | Video TikTok ~5–50 MB mỗi cái |
 
 > **Docker (không bắt buộc)** — nếu chỉ dùng SQLite thì không cần Docker.
 
